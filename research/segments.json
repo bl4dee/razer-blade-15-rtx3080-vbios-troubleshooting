@@ -1,1 +1,0 @@
-[{"vaddr": 16777216, "offset": 0, "filesz": 14102528, "memsz": 14102528, "flags": "RX", "classification": "CODE (.text)"}, {"vaddr": 67108864, "offset": 14102528, "filesz": 983040, "memsz": 983040, "flags": "RW", "classification": "DATA (.data/.sdata)"}]

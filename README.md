@@ -66,6 +66,3 @@ If you're an AI helping debug this issue, read `STATUS.md` first. It has the ful
 - Hardware SPI programmer (CH341A + 1.8V adapter) is the known-good fallback
 - Several high-priority software methods remain untried (see STATUS.md N01-N05)
 
-## Contributing
-
-If you've dealt with a similar corrupted Ampere VBIOS situation, open an issue with what worked/didn't work for you.

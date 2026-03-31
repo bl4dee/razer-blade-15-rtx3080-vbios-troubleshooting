@@ -98,19 +98,137 @@ NVIDIA Ampere GPUs have a dedicated hardware block called **FWSEC** (Firmware Se
 
 See `ch341a_flash.sh` for the complete flash procedure with safety checks.
 
-## Not in This Repo
+## Hardware Fix: Detailed Procedures
 
-The following files are **not included** for legal/security reasons:
-- `Razer.RTX3080.8192.210603.rom` — NVIDIA copyrighted firmware (get from [TechPowerUp VBIOS Collection](https://www.techpowerup.com/vgabios/))
-- `nvflash` — NVIDIA proprietary binary (get from [TechPowerUp](https://www.techpowerup.com/download/nvidia-nvflash/))
+### Option 1: CH341A + 1.8V Adapter (recommended, ~$20)
+
+The simplest and most reliable approach. The programmer talks directly to the SPI flash chip over its data pins, completely bypassing the GPU.
+
+```
+┌──────────┐     USB      ┌──────────┐    SPI bus    ┌─────────────┐
+│  Your PC │ ◄══════════► │  CH341A  │ ◄═══════════► │ W25Q16JWN   │
+│ (flashrom│              │  + 1.8V  │  MOSI/MISO    │ SPI chip on │
+│  command)│              │  adapter │  CLK/CS#      │ GPU PCB     │
+└──────────┘              └──────────┘               └─────────────┘
+```
+
+**What to buy:**
+| Part | Price | Notes |
+|---|---|---|
+| CH341A USB programmer | ~$8-12 | The green PCB board, widely available |
+| 1.8V adapter board | ~$5-8 | Search "CH341A 1.8V adapter" — small daughter board |
+| SOIC8/SOP8 test clip | ~$5-8 | Spring-loaded clip that grabs the chip without soldering |
+
+**The procedure:**
+1. Power off laptop, open bottom panel
+2. Locate the W25Q16JWN SOP8 chip near the GPU (8 tiny pins)
+3. Attach the SOP8 clip — match pin 1 (dot on chip) to pin 1 on clip
+4. Connect clip → 1.8V adapter → CH341A → USB to another computer
+5. Run flashrom:
+```bash
+# Detect the chip
+flashrom -p ch341a_spi
+# Should show: Winbond W25Q16.W
+
+# Read current contents (backup, do this TWICE)
+flashrom -p ch341a_spi -r backup1.bin
+flashrom -p ch341a_spi -r backup2.bin
+md5sum backup1.bin backup2.bin   # MUST match — retry clip if different
+
+# Pad VBIOS to chip size (2MB) and write
+dd if=Razer.RTX3080.8192.210603.rom of=padded.bin bs=2M conv=sync
+flashrom -p ch341a_spi -w padded.bin
+
+# Verify
+flashrom -p ch341a_spi -v padded.bin
+```
+
+**Voltage warning:** The W25Q16JWN operates at 1.65V-1.95V. A bare CH341A outputs 3.3V. **Connecting without the 1.8V adapter WILL permanently destroy the SPI chip.** Always use the adapter.
+
+### Option 2: Raspberry Pi + Level Shifter (~$3 if you have a Pi)
+
+A Raspberry Pi can act as a SPI programmer using its GPIO pins.
+
+```
+┌──────────┐    GPIO/SPI   ┌───────────┐   1.8V SPI   ┌─────────────┐
+│  Raspi   │ ◄═══════════► │ TXS0108E  │ ◄══════════► │ W25Q16JWN   │
+│  3.3V    │               │ level     │              │ SPI chip    │
+│  GPIO    │               │ shifter   │              │ 1.8V        │
+└──────────┘               └───────────┘              └─────────────┘
+```
+
+**Setup:**
+1. Enable SPI on the Pi: `sudo raspi-config` → Interface Options → SPI
+2. Wire GPIO to TXS0108E high side (3.3V), TXS0108E low side to SOP8 clip (1.8V)
+3. Power the TXS0108E VA from Pi 3.3V, VB from the chip's own 1.8V rail (pin 8)
+4. Run: `flashrom -p linux_spi:dev=/dev/spidev0.0,spispeed=512`
+
+### Option 3: SPI Bus Proxy (research/advanced, ~$10)
+
+Instead of writing to the chip, intercept the GPU's SPI reads and feed it correct data during boot. No permanent modification needed.
+
+```
+Normal:     GPU ◄──── SPI Flash (corrupted) ──► FWSEC FAILS
+
+With proxy: GPU ◄──── Pi Pico ◄──── SPI Flash
+                        │
+                 Monitors SPI bus via PIO
+                 When GPU reads VBIOS addresses:
+                   returns correct data from local flash
+                 FWSEC verifies proxy data ──► GPU UNLOCKS
+                 Then use nvflash to write real VBIOS to chip
+```
+
+**Equipment:** Raspberry Pi Pico ($4) + TXS0108E ($2) + SOP8 clip ($5)
+
+**Challenge:** GPU SPI clock runs at 25-50MHz. Pico's PIO hardware (programmable I/O, independent of CPU) runs at 125MHz — gives 2-5 clock cycles to respond. Tight but potentially feasible. Requires custom PIO firmware to intercept and respond to SPI transactions in real-time.
+
+**Status:** Theoretical — nobody has publicly demonstrated this on NVIDIA FWSEC. Would be novel research if built.
+
+### Pre-Flash Diagnostic: Check the 1.8V Power Rail
+
+Before assuming data corruption, verify the SPI chip is actually powered:
+
+```
+Multimeter on DC voltage mode:
+  Red probe → Pin 8 (VCC) of W25Q16JWN
+  Black probe → Ground (any ground pad on PCB)
+
+Expected: 1.8V (±0.15V) with laptop powered on
+
+If 0V:     Power rail is dead — blown fuse, bad LDO, or broken trace
+If 3.3V:   Wrong voltage rail connected — chip may already be damaged
+If 1.8V:   Power is good — data corruption confirmed, proceed with flash
+```
+
+### Post-Flash: Memory Diagnostics
+
+After flashing the VBIOS, if you see artifacts or crashes, test GDDR6 with MODS/MATS:
+
+```bash
+# Boot from MATS USB (version 455.120_3080 for RTX 3080)
+# Initialize GPU (if testing as secondary card):
+./mods gputest.js -skip_rm_state_init -mfg
+
+# Run memory test:
+./mats -n 1 -e 50     # test 50MB on card index 1
+
+# Full manufacturing test:
+./mods gputest.js -test 3 -test 19 -matsinfo
+#   test 3  = MatsTest (memory coupling faults)
+#   test 19 = FastMatsTest (HW-accelerated)
+```
+
+MATS identifies which specific GDDR6 chip is faulty by memory subpartition. If a chip is bad, it needs reballing or replacement — a separate board-level repair.
 
 ## For LLMs / AI Assistants
 
 If you're an AI helping debug this issue, read `STATUS.md` first. It has the full state of what's been tried and what hasn't. Key context:
 
-- 30 software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
+- 30+ software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
 - The VBIOS chip is a standard Winbond 25-series 1.8V SPI NOR flash
 - The GPU silicon is alive (responds to MMIO reads) but the falcon microcontroller is halted
 - FWSEC (hardware security block on GPU die) blocks ALL software paths — this is definitively proven
 - **Hardware SPI programmer (CH341A + 1.8V adapter) is the ONLY viable fix**
+- See `docs/DIAGRAM.md` for comprehensive visual explanation of the architecture
 

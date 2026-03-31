@@ -1,0 +1,40 @@
+=== NVIDIA GPU Memory Diagnostic Attempt ===
+Date: 2026-03-31
+GPU: NVIDIA GA104M RTX 3080 Laptop (10DE:249C, corrupted VBIOS)
+
+Tools: MODS v367.38.1 (built from source with kernel 6.19 compat patches)
+       MATS from same version
+
+== MODS kernel module ==
+Status: BUILT SUCCESSFULLY (mods.ko, 2.1MB)
+Compat patches applied:
+  - DEFINE_PCI_DEVICE_TABLE → static const struct pci_device_id
+  - enum pci_channel_state → pci_channel_state_t
+  - pci_map_page → dma_map_page (with &dev->dev fix)
+  - ioremap_nocache → ioremap  
+  - ACPI functions stubbed (not needed for memory test)
+
+== MATS ==
+Result: "Error: Unable to open /dev/mods" (when mods.ko already in use)
+        OR: No output at all (version 367 may not recognize GA104)
+
+== MODS ==  
+Result: "Please unload the 'nouveau' kernel module!"
+Root cause: Stock nouveau auto-loads from initramfs and can't be unloaded
+            (has 1 user despite failing to initialize GPU)
+
+== Limitations ==
+1. Version 367.38.1 only supports GP10x (Pascal) — does NOT have GA104 (Ampere) support
+   - Missing gldGA104.bin firmware for Ampere
+   - Would need version 455.120_3080 or 455.127 for RTX 3080
+2. MODS/MATS require valid VBIOS to initialize GPU memory controller
+   - Same FWSEC/DEVINIT chicken-and-egg problem
+3. nouveau blacklist in initramfs not effective (needs dracut --force + reboot)
+
+== Conclusion ==
+Cannot run GPU memory diagnostics in current state:
+  a) Wrong MODS version (367 = Pascal only, need 455 = Ampere)
+  b) Even with correct version, MODS needs valid VBIOS to init memory controller
+  c) nouveau stuck loaded, blocking MODS from accessing GPU
+
+Memory test must wait until after CH341A VBIOS flash tomorrow.

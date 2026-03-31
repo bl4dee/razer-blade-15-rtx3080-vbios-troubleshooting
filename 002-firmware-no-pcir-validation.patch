@@ -1,0 +1,26 @@
+--- /tmp/shadow.c.orig	2026-03-31 06:04:24.600598604 -0400
++++ /tmp/nouveau/nvkm/subdev/bios/shadow.c	2026-03-31 05:55:22.405744570 -0400
+@@ -160,13 +160,23 @@
+ 	release_firmware(fw);
+ }
+ 
++static u32
++shadow_fw_size(void *data)
++{
++	const struct firmware *fw = data;
++	return fw->size;
++}
++
+ static const struct nvbios_source
+ shadow_fw = {
+ 	.name = "firmware",
+ 	.init = shadow_fw_init,
+ 	.fini = shadow_fw_release,
+ 	.read = shadow_fw_read,
++	.size = shadow_fw_size,
+ 	.rw = false,
++	.no_pcir = true,
++	.ignore_checksum = true,
+ };
+ 
+ int

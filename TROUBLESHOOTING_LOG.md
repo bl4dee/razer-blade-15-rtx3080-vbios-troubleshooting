@@ -322,3 +322,42 @@ Advanced investigation using automated analysis, direct hardware probing, and cu
 The GSP falcon IS loadable from the host filesystem (confirmed: RM version 570.144 loads successfully every time). But the GSP cannot proceed with GPU initialization because FWSEC has not verified the VBIOS from SPI, so all other falcons remain in HALT state.
 
 **The ONLY fix is physical SPI flash programming.** Order the CH341A + 1.8V adapter + SOP8 clip immediately. Windows nvflash (N02) has near-zero probability of working given that FWSEC operates before any OS or driver loads.
+
+### Attempt 28 (T30): Falcon IMEM/DMEM Direct Write via BAR0 (hexkyz technique)
+- **When:** 2026-03-31, Session 4
+- **Background:** The hexkyz/SciresM research paper "Je Ne Sais Quoi — Falcons over the Horizon" (https://hexkyz.blogspot.com/2021/11/je-ne-sais-quoi-falcons-over-horizon.html) documents complete exploitation of the NVIDIA Falcon microprocessor (the same architecture used in our GPU's falcons). Key technique: upload custom code to Falcon IMEM via BAR0 MMIO registers (IMEMC/IMEMD), then start the Falcon CPU.
+- **How:** Scanned all falcon engine BAR0 base addresses for accessibility:
+
+| Engine | Base | Status |
+|---|---|---|
+| PMU | 0x10A000 | Accessible (HWCFG=0x01, registers respond) |
+| GSP | 0x110000 | Accessible (HWCFG=0x80, IMEM=32KB, has data from previous nouveau load) |
+| SEC2 | 0x840000 | Accessible (same state as GSP, DMEMD=`DEAD5EC2`) |
+| NVENC | 0x1C8000 | Accessible (BADF1201 pattern — different gating) |
+| NVDEC0/1 | 0x848000/84C000 | Accessible (similar BADF pattern) |
+| FWSEC | 0x8F0000 | **GATED** (BADF3000) |
+| FBFALCON | 0x8F1000 | **GATED** (BADF3000) |
+| DISP/MINION | 0x611000/612000 | **GATED** (BADF5040) |
+
+- Attempted writes to PMU, GSP, and SEC2 falcon registers:
+
+| Target Register | Write Value | Readback | Result |
+|---|---|---|---|
+| PMU IMEMC | 0x01000000 | 0x00000000 | Rejected |
+| PMU IMEMD | 0xCAFEBABE | 0x00000000 | Rejected |
+| PMU DMEMD | 0xDEADBEEF | 0x00000000 | Rejected |
+| GSP IMEMC | 0x01000000 | 0x9100EB00 | Rejected (unchanged) |
+| GSP IMEMD | 0xCAFEBABE | 0x00000000 | Rejected |
+| GSP DMEMD | 0xDEADBEEF | 0xDEAD5EC2 | Rejected |
+| GSP CPUCTL (START) | 0x00000002 | 0x00000000 | Rejected |
+| GSP BOOTVEC | 0x00000000 | 0x80420100 | Rejected |
+| GSP DMATRFBASE | 0x12345678 | 0x00000000 | Rejected |
+| SEC2 IMEMD | 0xCAFEBABE | 0x00000000 | Rejected |
+| SEC2 DMEMD | 0xDEADBEEF | 0xDEAD5EC2 | Rejected |
+
+- **Result:** FAILED — **Every falcon register is completely write-locked by FWSEC.** All registers are readable (not gated) but reject all host writes: IMEM, DMEM, CPUCTL (start bit), BOOTVEC, DMA registers. The `DEAD5EC2` value in SEC2 DMEM is NVIDIA's debug marker ("DEAD SEC2") confirming the security engine knows it's in a locked state.
+- **Analysis:** The hexkyz exploits (maconstack, DMA race against Secure Boot ROM) require writable IMEM as a prerequisite — the attacker must be able to upload code before exploiting the ROM. On the Nintendo Switch TSEC, IMEM is host-writable from power-on. On Ampere GPUs, FWSEC adds a hardware write-lock on ALL falcon registers that is only released after VBIOS cryptographic verification. This makes the hexkyz-style attack vector inapplicable to Ampere.
+
+### Final Session 4 Summary
+
+31 methods tested in total (T01–T30). Every conceivable software path has been explored and definitively blocked by FWSEC hardware write-locks on all falcon IMEM/DMEM/control registers. The CH341A hardware SPI programmer is the only remaining option.

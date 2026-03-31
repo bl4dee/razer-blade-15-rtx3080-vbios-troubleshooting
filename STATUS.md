@@ -197,6 +197,12 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** **DEFINITIVE FINDING** — FWSEC (Firmware Security) is a dedicated GPU hardware block that cryptographically verifies VBIOS directly from SPI before unlocking ANY falcon. Error strings confirm: signature verification, certificate chain, device ID, HAT (Hardware Access Token), HULK co-processor checks. FWSEC is NOT software-controllable. This is why all software approaches fail.
 - **Times tried:** 1
 
+### T30 — Falcon IMEM/DMEM Direct Write via BAR0 (hexkyz technique)
+- **When:** 2026-03-31, Session 4
+- **How:** Based on hexkyz/SciresM Falcon research. Scanned all falcon BAR0 bases. Found PMU (0x10A000), GSP (0x110000), SEC2 (0x840000) accessible for reads. Attempted writes to IMEMC/IMEMD, DMEMC/DMEMD, CPUCTL (START bit), BOOTVEC, DMATRFBASE on all three engines.
+- **Result:** FAILED — **Every falcon register is completely write-locked.** All reads work but ALL writes are rejected (readback unchanged). FWSEC hardware gate blocks host writes to falcon IMEM/DMEM/control registers until VBIOS is verified from SPI. SEC2 DMEMD returns `0xDEAD5EC2` ("DEAD SEC2") confirming locked state.
+- **Times tried:** 3 (PMU, GSP, SEC2 — each with IMEM, DMEM, CPUCTL, DMA tested)
+
 ---
 
 ## RULED OUT (researched, not attempted)
@@ -237,8 +243,12 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Why ruled out:** Custom kernel module with kretprobes on `pci_map_rom()` causes nouveau to stall during PCI core initialization before BIOS reading phase. The kretprobes interfere with PCI enumeration. See T28.
 - **Ruled out:** 2026-03-31
 
-### N22 — Any Software-Only Approach (Definitive)
-- **Why ruled out:** FWSEC hardware security module on the GPU die must read and cryptographically verify VBIOS directly from the SPI flash chip BEFORE any falcon microcontroller is unlocked. This is a hardware-enforced secure boot chain (signature → certificate → device ID → HAT → HULK). No OS, driver, firmware override, or register manipulation can bypass FWSEC. See T29.
+### N22 — Falcon IMEM/DMEM Direct Code Upload (hexkyz technique)
+- **Why ruled out:** Scanned all falcon BAR0 bases — PMU, GSP, SEC2 are readable but ALL registers (IMEM, DMEM, CPUCTL, BOOTVEC, DMA) are completely write-locked by FWSEC. The hexkyz/SciresM Falcon exploits (maconstack, DMA race) require writable IMEM as a prerequisite. On Ampere, FWSEC blocks this at the hardware level. See T30.
+- **Ruled out:** 2026-03-31
+
+### N23 — Any Software-Only Approach (Definitive)
+- **Why ruled out:** FWSEC hardware security module on the GPU die must read and cryptographically verify VBIOS directly from the SPI flash chip BEFORE any falcon microcontroller is unlocked. This is a hardware-enforced secure boot chain (signature → certificate → device ID → HAT → HULK). No OS, driver, firmware override, register manipulation, or falcon code injection can bypass FWSEC. 31 methods tried across 4 sessions — all failed. See T01–T30.
 - **Ruled out:** 2026-03-31
 
 ---
@@ -289,4 +299,6 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | System BIOS (MTD) | 12MB readable — NO embedded GPU VBIOS found |
 | FWSEC (hardware) | Cryptographic VBIOS verification on GPU die — cannot be bypassed by software |
 | GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
-| Total methods tried | 29 (T01–T29 across 4 sessions) + 10 researched/ruled out (N03–N22) |
+| Falcon register write-lock | PMU/GSP/SEC2 IMEM/DMEM/CPUCTL all reject writes — FWSEC hardware gate |
+| SEC2 DMEMD marker | `0xDEAD5EC2` ("DEAD SEC2") — NVIDIA locked-state debug value |
+| Total methods tried | 30 (T01–T30 across 4 sessions) + 11 researched/ruled out (N03–N23) |

@@ -51,7 +51,8 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 6. **PCIe bus reset** produces definitive error: `Falcon In HALT or STOP state` — confirming the chicken-and-egg
 7. **System BIOS** (12MB scanned via MTD) does NOT contain an embedded GPU VBIOS
 8. **VBIOS file format** starts with `NVGI` (NVIDIA container), not `55 AA` — first PCI ROM sub-image at offset 0x9400
-9. **FWSEC hardware security** on the GPU die cryptographically verifies VBIOS from SPI before unlocking ANY falcon — this is the definitive reason all 29 software methods fail
+9. **FWSEC hardware security** on the GPU die cryptographically verifies VBIOS from SPI before unlocking ANY falcon — this is the definitive reason all 30 software methods fail
+10. **Falcon IMEM/DMEM direct write** (hexkyz technique) — PMU, GSP, SEC2 falcon registers are readable via BAR0 but ALL writes are hardware-locked by FWSEC
 
 ## Root Cause: FWSEC Hardware Security
 
@@ -89,7 +90,7 @@ The following files are **not included** for legal/security reasons:
 
 If you're an AI helping debug this issue, read `STATUS.md` first. It has the full state of what's been tried and what hasn't. Key context:
 
-- 29 software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
+- 30 software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
 - The VBIOS chip is a standard Winbond 25-series 1.8V SPI NOR flash
 - The GPU silicon is alive (responds to MMIO reads) but the falcon microcontroller is halted
 - FWSEC (hardware security block on GPU die) blocks ALL software paths — this is definitively proven

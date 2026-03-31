@@ -167,3 +167,68 @@ The fundamental problem is confirmed: **the GPU's falcon microcontroller is halt
 1. CH341A USB programmer ($5-15)
 2. 1.8V adapter board (CRITICAL — chip is 1.8V only, DO NOT USE 3.3V)
 3. SOP8 test clip (Pomona 5250 or similar)
+
+---
+
+## Session 2 — 2026-03-30 (Windows, continued from Session 1)
+
+### Attempt 14 (T17): Razer System BIOS Update
+- Downloaded Razer BIOS updater for RZ09-0409 from mysupport.razer.com
+- Ran from Windows. System BIOS updated successfully from v1.06 to v2.x
+- Theory: newer system BIOS might re-provision the dGPU VBIOS from an embedded copy
+- **Result:** FAILED — GPU still shows Code 43 after reboot. Running the updater again reports "up to date"
+- System BIOS update did NOT re-provision the dGPU VBIOS chip
+- Ran updater a second time to confirm — reported system already up to date
+
+---
+
+## Session 3 — 2026-03-31 (Fedora 43 Live USB, kernel 6.19.10)
+
+**Environment change:** Moved from Ubuntu Live USB to Fedora 43 repair USB (installed on external SSD at /dev/sda). Kernel 6.19.10-200.fc43.x86_64. Windows confirmed on nvme0n1p4 ("Blade 15", 934GB). EFI Boot0000 = Windows Boot Manager.
+
+**Key finding from this session:** The Fedora 43 kernel ships nouveau with GSP RM firmware (570.144) — nouveau now uses the same NVIDIA GSP firmware path as the open proprietary driver. This rules out the nouveau NvBios/ForcePost approach (N05), as those parameters no longer exist in GSP-based nouveau.
+
+### Attempt 15 (T18): ACPI Table Search for _ROM Method
+- Installed acpica-tools, dumped and decompiled DSDT + all 13 SSDTs
+- Searched all tables for `_ROM`, `VBIOS`, `NVROM`, `ROMF` strings
+- **Result:** DEAD END — No `_ROM` method exists in any ACPI table
+- System BIOS does not hold a GPU VBIOS copy accessible via ACPI
+- Rules out N07 entirely
+
+### Attempt 16 (T19): PCI Remove/Rescan
+- `echo 1 > /sys/bus/pci/devices/0000:01:00.0/remove`
+- `echo 1 > /sys/bus/pci/devices/0000:00:01.0/rescan`
+- GPU re-enumerated and nouveau auto-attached on rescan
+- **Result:** FAILED — identical behavior: `Invalid PCI ROM header signature: expecting 0xaa55, got 0x56fe`, `bios ctor failed: -22`
+- PCIe link still 2.5 GT/s x8. No change in GPU state from remove/rescan.
+
+### Attempt 17 (T20): envytools nvagetbios
+- Installed envytools from Fedora 43 repos (v0.0-0.33.git20200810)
+- Unloaded nouveau first, then ran:
+  - `nvagetbios` (auto-detect) → tried PRAMIN then PROM, both failed
+  - `nvagetbios -s PRAMIN` → "Invalid signature(0x55aa)" — output is repeating garbage (uninitialized falcon memory pattern)
+  - `nvagetbios -s PROM` → "Invalid signature(0x55aa)" — corrupt sig 0x56FE, same as T09/T13
+- **Result:** FAILED — No new information. Same corrupted/uninitialized state confirmed.
+
+### Attempt 18 (T21): nvflash with nouveau Fully Unloaded (Post-BIOS-Update)
+- Cloned repo to get nvflash (v5.867.0) and VBIOS ROM locally
+- Confirmed ROM file integrity: `nvflash --version Razer.RTX3080.8192.210603.rom` shows correct metadata (v94.04.55.00.92, Device 24DC, Board 0x0262, Subsystem 1A58:2018, MD5 match)
+- Fully unloaded nouveau (`modprobe -r nouveau mxm_wmi`), confirmed no GPU drivers in lsmod
+- Tried three variations:
+  - `./nvflash Razer.RTX3080.8192.210603.rom` → "EEPROM not found"
+  - `./nvflash --overridesub Razer.RTX3080.8192.210603.rom` → "EEPROM not found"
+  - `./nvflash -6 Razer.RTX3080.8192.210603.rom` → "EEPROM not found"
+- GPU IS detected in `--list` (`10DE,249C,1A58,2018`) but SPI EEPROM unreachable
+- **Result:** FAILED — No change from T01–T05. BIOS update had no effect on GPU VBIOS state.
+
+### Research Findings — Methods Ruled Out Without Attempting
+- **nvflashk (N03):** Confirmed Windows-only. Only bypasses board ID/subsystem mismatch checks. Underlying SPI probe code identical to stock nvflash. No benefit over `-6 --overridesub` already tried.
+- **nouveau NvBios/ForcePost (N05):** GSP-based nouveau (kernel 6.19) does not expose NvBios or NvForcePost parameters. Classic file-based VBIOS loading path removed in GSP nouveau. Would require kernel ≤5.19.
+- **ACPI _ROM (N07):** Eliminated by T18 above.
+
+### Session 3 Summary
+21 methods tried across 3 sessions. Every software path is exhausted or eliminated. The halted falcon is an absolute blocker for all software approaches — the SPI controller cannot be reached without a running falcon, and the falcon cannot run without the VBIOS stored on that same SPI chip.
+
+**Next steps in priority order:**
+1. **N02 — Windows nvflash** (boot into Windows, try nvflash64.exe — see WINDOWS_NVFLASH_PROCEDURE.md)
+2. **N15 — Order CH341A + 1.8V adapter** (do this now regardless of N02 outcome — it's the definitive fix)

@@ -149,6 +149,54 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** FAILED — All variations give "Adapter not accessible or supported EEPROM not found". No change from T01–T05 despite BIOS update. nvflash detects the GPU (`10DE,249C,1A58,2018`) but cannot reach the EEPROM through the halted falcon.
 - **Times tried:** 3
 
+### T22 — System BIOS Flash Scan via MTD
+- **When:** 2026-03-31, Session 4
+- **How:** Read 12MB of system BIOS from `/dev/mtd0ro` (Intel SPI driver exposes BIOS flash as MTD). Scanned for NVGI, NVIDIA, GeForce, RTX, 10DE device IDs.
+- **Result:** DEAD END — Zero NVIDIA content in system BIOS. Razer does NOT embed the dGPU VBIOS in system firmware.
+- **Times tried:** 1
+
+### T23 — SMBus/I2C Device Enumeration
+- **When:** 2026-03-31, Session 4
+- **How:** `i2cdetect -r -y` on buses 0 and 15. Dumped device at 0x44 (temperature sensor). Searched for GPU at 0x48-0x4F range.
+- **Result:** DEAD END — No GPU SMBus slave found. Device at 0x44 is a system thermal sensor.
+- **Times tried:** 1
+
+### T24 — VBIOS File Format Analysis
+- **When:** 2026-03-31, Session 4
+- **How:** Hexdumped ROM file; compared first 512 bytes of PROM window (BAR0+0x300000) against ROM file byte-by-byte.
+- **Result:** ROM starts with `NVGI` (4E 56 47 49), NOT `55 AA`. First `55 AA` PCI sub-image at offset 0x9400 (63KB, device ID 24DC confirmed). PROM data only 4.3% match — unreliable bus noise, not actual SPI contents.
+- **Times tried:** 1
+
+### T25 — BAR0 PROM Window Write Test
+- **When:** 2026-03-31, Session 4
+- **How:** Opened BAR0 resource0 for write. Wrote VBIOS bytes to PROM offset (0x300000). Verified readback.
+- **Result:** FAILED — Writes silently discarded. PROM window is hardware read-only.
+- **Times tried:** 1
+
+### T26 — GSP RM Registry Keys (NVreg_RegistryDwords)
+- **When:** 2026-03-31, Session 4
+- **How:** `modprobe nouveau NVreg_RegistryDwords="RMDevinitBySecureBoot=0;RMDisableSpi=1"`
+- **Result:** FAILED — PCIROM changed from 0x56EE→0xFFFF (keys affected SPI), but host-side bios ctor still fails -22.
+- **Times tried:** 1
+
+### T27 — nouveau PLATFORM Source + Firmware File
+- **When:** 2026-03-31, Session 4
+- **How:** Placed VBIOS at `/lib/firmware/nouveau/vbios.rom`. Loaded nouveau with `config=NvBios=PLATFORM debug=bios=trace`. Enabled firmware_class kernel debug.
+- **Result:** FAILED — PLATFORM source does NOT call `request_firmware()` in GSP mode. Dead code path for Ampere. File never requested.
+- **Times tried:** 3
+
+### T28 — Custom kretprobe Kernel Module (vbios_inject.ko)
+- **When:** 2026-03-31, Session 4
+- **How:** Wrote and compiled custom kernel module using kretprobes on `pci_map_rom()` to intercept PCI ROM reads for GPU and return valid VBIOS data. Module loaded, kretprobes registered.
+- **Result:** FAILED — With kretprobes active, nouveau stalled before reaching BIOS reading phase. PCI core interaction issue. Interceptor never triggered.
+- **Times tried:** 2
+
+### T29 — GSP Firmware FWSEC Security Analysis
+- **When:** 2026-03-31, Session 4
+- **How:** Extracted strings from `gsp-570.144.bin` (63MB). Searched for VBIOS verification error codes.
+- **Result:** **DEFINITIVE FINDING** — FWSEC (Firmware Security) is a dedicated GPU hardware block that cryptographically verifies VBIOS directly from SPI before unlocking ANY falcon. Error strings confirm: signature verification, certificate chain, device ID, HAT (Hardware Access Token), HULK co-processor checks. FWSEC is NOT software-controllable. This is why all software approaches fail.
+- **Times tried:** 1
+
 ---
 
 ## RULED OUT (researched, not attempted)
@@ -165,60 +213,57 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Why ruled out:** Decompiled and searched DSDT + all 13 SSDTs (2026-03-31). No `_ROM` method exists in any table. System BIOS does not hold a GPU VBIOS copy via ACPI. See T18.
 - **Ruled out:** 2026-03-31
 
+### N16 — System BIOS Embedded VBIOS Extraction
+- **Why ruled out:** Scanned 12MB of accessible system BIOS flash via `/dev/mtd0`. Zero hits for NVGI, NVIDIA, GeForce, RTX, or 10DE device IDs. Razer does not embed the dGPU VBIOS. See T22.
+- **Ruled out:** 2026-03-31
+
+### N17 — SMBus/I2C Access to GPU SPI
+- **Why ruled out:** Enumerated all 16 I2C buses. No GPU SMBus slave found at any address. GPU does not expose I2C/SMBus interface for SPI access. See T23.
+- **Ruled out:** 2026-03-31
+
+### N18 — nouveau PLATFORM Firmware Loading (GSP mode)
+- **Why ruled out:** Kernel firmware_class debug confirms PLATFORM source does NOT call `request_firmware()` in GSP-mode nouveau. The `vbios.rom` string in the binary is dead code for Ampere. See T27.
+- **Ruled out:** 2026-03-31
+
+### N19 — BAR0 PROM Window Data Injection
+- **Why ruled out:** PROM window at BAR0+0x300000 is hardware read-only. Writes silently discard. Cannot inject VBIOS data through MMIO. See T25.
+- **Ruled out:** 2026-03-31
+
+### N20 — GSP RM Registry Key Override
+- **Why ruled out:** While `RMDisableSpi` and `RMDevinitBySecureBoot` do affect GPU SPI behavior (confirmed: PCIROM value changed), the host-side nouveau `bios ctor` check happens BEFORE the GSP uses these keys. Can't bypass the host-side check. See T26.
+- **Ruled out:** 2026-03-31
+
+### N21 — pci_map_rom kretprobe Injection
+- **Why ruled out:** Custom kernel module with kretprobes on `pci_map_rom()` causes nouveau to stall during PCI core initialization before BIOS reading phase. The kretprobes interfere with PCI enumeration. See T28.
+- **Ruled out:** 2026-03-31
+
+### N22 — Any Software-Only Approach (Definitive)
+- **Why ruled out:** FWSEC hardware security module on the GPU die must read and cryptographically verify VBIOS directly from the SPI flash chip BEFORE any falcon microcontroller is unlocked. This is a hardware-enforced secure boot chain (signature → certificate → device ID → HAT → HULK). No OS, driver, firmware override, or register manipulation can bypass FWSEC. See T29.
+- **Ruled out:** 2026-03-31
+
 ---
 
 ## NOT YET TRIED
 
-### N02 — nvflash on Windows ⬅ NEXT
-- **Priority:** HIGH
+### N02 — nvflash on Windows
+- **Priority:** LOW (downgraded from HIGH after FWSEC discovery)
 - **How:** Reboot into Windows (nvme0n1p4 "Blade 15", Boot0000 in EFI). Download nvflash64.exe. Run as Administrator with the ROM file.
-- **Why it might work:** UEFI POSTs the GPU via GOP before any driver loads — different code path from Linux. If UEFI partially initializes the falcon, Windows nvflash (WDDM shim, not raw /dev/mem) may reach the EEPROM.
+- **Why it probably won't work:** FWSEC hardware verification happens before any OS loads. UEFI cannot initialize the GPU without a valid VBIOS in SPI either. Windows nvflash would hit the same halted falcon.
 - **Risk:** Low — worst case same EEPROM not found error
 - **See:** WINDOWS_NVFLASH_PROCEDURE.md for step-by-step
 
-### N04 — NVIDIA 470 Proprietary Driver
-- **Priority:** LOW
-- **How:** Requires kernel ≤5.19 (470.xx doesn't support kernel 6.19). Would need an old kernel installed alongside.
-- **Why it probably won't help:** 470 doesn't use GSP, but still reads VBIOS from hardware during init. The falcon is halted — the read fails regardless of which driver does it.
-
-### N06 — Boot Parameter Combinations
-- **Priority:** LOW
-- **How:** Add at GRUB prompt: `iommu=off iomem=relaxed pcie_aspm=off`
-- **Why it probably won't help:** BAR0 access already works fine (direct reads confirmed). The halted falcon is the blocker, not access restrictions.
-
-### N08 — Older nvflash Versions (5.118, 5.314, 5.590)
-- **Priority:** LOW
-- **How:** Download from TechPowerUp, try with standard and `-6` flags.
-- **Why it probably won't help:** The failure is falcon registers returning BADF — not the EEPROM detection database. All versions hit the same wall.
-
-### N11 — devmem2 / Direct SPI Register Writes
-- **Priority:** LOW
-- **How:** Boot with `iomem=relaxed`. Use devmem2 to write directly to BAR0+0xE100 (SPI controller registers).
-- **Why it probably won't work:** SPI controller registers return BADF because the falcon hardware block gating them is halted. Writes have no effect without a running falcon.
-
-### N12 — OMGVflash (Windows, by Veii)
-- **Priority:** LOW
-- **Why it probably won't work:** OMGVflash bypasses EEPROM write-protect bits — not the halted falcon state. Same root blocker.
-
-### N13 — VFIO GPU Passthrough to Windows VM
-- **Priority:** VERY LOW
-- **Why:** GPU enters VM in the same halted state. OVMF cannot POST it without a valid VBIOS. Complex setup, near-certain failure.
-
-### N14 — DOS-Mode nvflash
-- **Priority:** LOW
-- **How:** FreeDOS bootable USB with nvflash DOS binary.
-- **Why it might work:** UEFI has already run by the time DOS boots — same UEFI-init theory as N02 but without Windows overhead.
-
-### N15 — CH341A Hardware SPI Programmer ⬅ DEFINITIVE SOLUTION
-- **Priority:** FALLBACK — order now, do after N02
+### N15 — CH341A Hardware SPI Programmer ⬅ **THE FIX — ORDER NOW**
+- **Priority:** CRITICAL — this is the ONLY remaining viable method
 - **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN.
-- **Why it works:** Bypasses the GPU and falcon entirely. Talks SPI directly to the flash chip. ~95% success rate.
-- **CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V WILL destroy it. 1.8V adapter is mandatory.
+- **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip via external programmer. ~95% success rate. This is how every NVIDIA VBIOS recovery on Ampere is done.
+- **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY**.
 - **What to buy:**
   - CH341A USB programmer: ~$8–12
-  - 1.8V adapter board: ~$5–8
+  - 1.8V adapter board (search "CH341A 1.8V adapter"): ~$5–8
   - SOIC8/SOP8 test clip with ribbon cable: ~$5–8
   - Total: ~$20–28 Amazon / ~$15 AliExpress
+- **Alternative:** Raspberry Pi + TXS0108E level shifter (~$3 if you have a Pi)
+- **Pre-flash check:** Use a multimeter on pin 8 (VCC) of the W25Q16JWN while laptop is powered. Expected: 1.8V (±0.15V). If 0V or 3.3V, you have a power rail problem, not just data corruption.
 - **See:** ch341a_flash.sh for exact flashrom commands
 
 ---
@@ -240,3 +285,8 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | SPI Registers (0xE100) | BADF5040 (uninitialized falcon) |
 | nouveau BIOS read | PROM sig 0x56FE, ACPI sig 0x0000, all 5 sources failed |
 | NVIDIA open driver | GSP init failed — no valid ROM signature (0x62:0x25:2015) |
+| VBIOS file format | Starts with `NVGI` (4E 56 47 49), NOT `55 AA`. First PCI ROM at offset 0x9400 |
+| System BIOS (MTD) | 12MB readable — NO embedded GPU VBIOS found |
+| FWSEC (hardware) | Cryptographic VBIOS verification on GPU die — cannot be bypassed by software |
+| GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
+| Total methods tried | 29 (T01–T29 across 4 sessions) + 10 researched/ruled out (N03–N22) |

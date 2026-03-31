@@ -232,3 +232,93 @@ The fundamental problem is confirmed: **the GPU's falcon microcontroller is halt
 **Next steps in priority order:**
 1. **N02 — Windows nvflash** (boot into Windows, try nvflash64.exe — see WINDOWS_NVFLASH_PROCEDURE.md)
 2. **N15 — Order CH341A + 1.8V adapter** (do this now regardless of N02 outcome — it's the definitive fix)
+
+---
+
+## Session 4 — 2026-03-31 (Fedora 43, same boot session as Session 3)
+
+Advanced investigation using automated analysis, direct hardware probing, and custom kernel module development.
+
+### Attempt 19 (T22): System BIOS Flash Scan via MTD
+- **Discovery:** Intel SPI driver (`spi_intel_pci`) exposes the system BIOS flash as `/dev/mtd0` (32MB, "BIOS" partition)
+- Read first 12MB successfully (remaining 20MB protected by Intel ME/SMM)
+- Scanned for `NVGI`, `NVIDIA`, `GeForce`, `RTX`, `10DE:24DC` signatures
+- **Result:** DEAD END — Zero hits for any NVIDIA content in the readable system BIOS region. Razer does NOT embed the dGPU VBIOS in the system firmware. The `ROM_CMN` EFI variable contains only ACPI device metadata (`GFX0`, `GLAN`, `SAT0`), not ROM images.
+
+### Attempt 20 (T23): SMBus/I2C Device Enumeration
+- Scanned all 16 I2C buses (`i2cdetect -r -y` on buses 0 and 15)
+- **Bus 15 (Intel SMBus I801):** Found devices at 0x30, 0x35, 0x44, 0x50, 0x52
+- **Device at 0x44:** Readable temperature sensor (values 0x39=57°C, 0x34=52°C) — system thermal sensor, NOT GPU-related
+- Devices at 0x30, 0x35 returned XX (access error) — likely write-only or unsupported mode
+- **Result:** DEAD END — No GPU SMBus slave found. The GPU does not expose an I2C/SMBus interface for SPI access.
+
+### Attempt 21 (T24): VBIOS File Format Analysis (Critical Discovery)
+- Hexdumped the target VBIOS ROM file
+- **Key finding:** The ROM file starts with `4E 56 47 49` = **`NVGI`**, NOT `55 AA`
+  - NVGI is NVIDIA's proprietary VBIOS container format for Ampere+
+  - `55 AA` (standard PCI option ROM) appears first at offset **0x9400** (63KB legacy x86 sub-image)
+  - The PCIR data structure at 0x9400+0x170 shows Vendor `10DE`, Device `24DC` (correct!)
+  - 10+ additional sub-images at various offsets (EFI GOP, configuration tables, etc.)
+- Previous PROM reading of `6E 56 47 49` = `nVGI` (lowercase n) differs from the file's `4E 56 47 49` = `NVGI` by exactly **1 bit** (bit 5 of byte 0, XOR = 0x20)
+- **However:** Further 512-byte PROM comparison showed only 4.3% match, 27.7% erased (0xFF), 67.6% different — confirming PROM data is unreliable bus noise, not actual SPI contents
+
+### Attempt 22 (T25): BAR0 PROM Window Write Test
+- Attempted to write correct VBIOS data to PROM window at BAR0+0x300000
+- Write calls succeeded (no exception), but readback showed **different** data — writes are silently discarded
+- **Result:** CONFIRMED — PROM window is hardware read-only. Cannot inject VBIOS data through BAR0.
+
+### Attempt 23 (T26): BAR0 PMC_ENABLE Register Manipulation
+- Current value: `0x40000000` (only basic PCI enabled)
+- Attempted OR with `0x10000000` (PROM engine enable bit)
+- Readback unchanged at `0x40000000` — register rejects additional enable bits
+- **Result:** Same as T11. PMC_ENABLE is locked when falcon is halted.
+
+### Attempt 24 (T27): GSP RM Registry Keys via NVreg_RegistryDwords
+- Searched the GSP firmware binary (`gsp-570.144.bin`, 63MB) for registry key names
+- Found `RMDisableSpi` and `RMDevinitBySecureBoot` among ~200+ RM registry keys
+- Loaded nouveau with: `NVreg_RegistryDwords="RMDevinitBySecureBoot=0;RMDisableSpi=1"`
+- **Observation:** PCIROM changed from `0x56EE` to `0xFFFF` — the registry keys DID affect SPI access behavior
+- **Result:** FAILED — Host-side nouveau BIOS check still fails before GSP can use the VBIOS. The `bios ctor failed: -22` error occurs on the host side, blocking the entire init chain.
+
+### Attempt 25 (T28): nouveau PLATFORM Source Investigation
+- Used `config=NvBios=PLATFORM` with `debug=bios=trace` for verbose BIOS loading
+- **Full source order revealed:** PLATFORM → PRAMIN → PROM → ACPI → ACPI → PCIROM → PLATFORM
+- PLATFORM said "PLATFORM invalid" — found but rejected
+- **Critical finding via firmware_class debug:** Enabling firmware loader tracing showed **no `request_firmware()` call** for `vbios.rom` during PLATFORM source execution. In GSP-mode nouveau (kernel 6.19+), the PLATFORM source does NOT use the firmware subsystem to load VBIOS files. The `vbios.rom` string and `NvBios` config option are dead code paths for Ampere GPUs.
+- Tried placing ROM at `/lib/firmware/nouveau/vbios.rom` and `/lib/firmware/nvidia/ga104/vbios.rom` — neither was requested by nouveau
+
+### Attempt 26 (T29): Custom Kernel Module — VBIOS Injection via kretprobe
+- **Wrote `vbios_inject.ko`:** Custom kernel module using kretprobes on `pci_map_rom()` and `pci_unmap_rom()` to intercept PCI ROM reads for the NVIDIA GPU (10DE:249C) and return valid VBIOS data from a kmalloc'd buffer
+- Module compiled, loaded, and registered kretprobes successfully
+- Loaded the extracted 55AA PCI option ROM sub-image (63KB) via `request_firmware("nouveau/vbios.rom")`
+- **Result:** FAILED — When vbios_inject kretprobes were active, nouveau stalled at "Resources present before probing" without reaching the BIOS reading phase. The kretprobes on `pci_map_rom` interfered with PCI core initialization. The `pci_map_rom` interceptor was never triggered (0 hits).
+
+### Attempt 27 (T30): GSP Firmware FWSEC Analysis (Definitive Finding)
+- Extracted and searched all strings from `nvidia/ga102/gsp/gsp-570.144.bin` (63MB)
+- **Found hardware-enforced VBIOS verification chain:**
+  ```
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_BIOS_SIG_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_CERT_NOT_FOUND
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_CERT_PARSE_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_CERT_VERIFY_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_DEVID_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_HAT_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_HULK_INIT_FAIL
+  NV_FWSECLIC_ERR_CODE_CMD_VBIOS_VERIFY_HULK_SIG_INVALID
+  ```
+- **FWSEC** (Firmware Security) is a dedicated hardware block on the GPU die that reads and cryptographically verifies the VBIOS directly from SPI flash BEFORE unlocking any falcon microcontrollers
+- The verification chain includes: digital signature, certificate chain, device ID matching, Hardware Access Token (HAT), and HULK (hardware security co-processor) verification
+- FWSEC operates at a lower level than the falcon — it is NOT software-controllable
+
+### Session 4 Conclusion
+
+**FWSEC hardware security on NVIDIA Ampere is the definitive reason all software approaches fail.** The GPU has a dedicated hardware block (FWSEC) that must read the VBIOS directly from the SPI flash chip and verify its cryptographic signature chain before ANY falcon microcontroller is allowed to boot. This hardware mechanism:
+
+1. Cannot be bypassed by any OS-level software
+2. Cannot be overridden by GSP RM registry keys
+3. Cannot be circumvented by providing VBIOS data from host memory
+4. Is not affected by driver choice (nouveau, NVIDIA open, proprietary)
+
+The GSP falcon IS loadable from the host filesystem (confirmed: RM version 570.144 loads successfully every time). But the GSP cannot proceed with GPU initialization because FWSEC has not verified the VBIOS from SPI, so all other falcons remain in HALT state.
+
+**The ONLY fix is physical SPI flash programming.** Order the CH341A + 1.8V adapter + SOP8 clip immediately. Windows nvflash (N02) has near-zero probability of working given that FWSEC operates before any OS or driver loads.

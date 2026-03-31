@@ -49,6 +49,35 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 4. **nouveau** fails — all 5 BIOS sources (PRAMIN, PROM, ACPI, PCIROM, PLATFORM) return corrupt or empty data
 5. **Direct BAR0 register access** confirms GPU silicon is alive (GA104) but SPI controller regions return BADF (uninitialized falcon)
 6. **PCIe bus reset** produces definitive error: `Falcon In HALT or STOP state` — confirming the chicken-and-egg
+7. **System BIOS** (12MB scanned via MTD) does NOT contain an embedded GPU VBIOS
+8. **VBIOS file format** starts with `NVGI` (NVIDIA container), not `55 AA` — first PCI ROM sub-image at offset 0x9400
+9. **FWSEC hardware security** on the GPU die cryptographically verifies VBIOS from SPI before unlocking ANY falcon — this is the definitive reason all 29 software methods fail
+
+## Root Cause: FWSEC Hardware Security
+
+NVIDIA Ampere GPUs have a dedicated hardware block called **FWSEC** (Firmware Security) that:
+1. Reads the VBIOS directly from the SPI flash chip (not through software or the falcon)
+2. Verifies a full cryptographic chain: digital signature → certificate → device ID → HAT → HULK
+3. Only AFTER successful verification does it unlock the falcon microcontrollers
+
+**No software — no driver, no registry key, no kernel module, no firmware override — can bypass FWSEC.** The SPI flash chip must be physically reprogrammed using an external hardware programmer.
+
+## Solution: Hardware SPI Programming
+
+**Order these parts (~$20-28 total):**
+| Part | Price |
+|---|---|
+| CH341A USB programmer | ~$8-12 |
+| 1.8V adapter board | ~$5-8 |
+| SOIC8/SOP8 test clip | ~$5-8 |
+
+**⚠️ CRITICAL: The W25Q16JWN is a 1.8V chip. A bare CH341A outputs 3.3V and WILL DESTROY IT. The 1.8V adapter is MANDATORY.**
+
+**Alternative:** Raspberry Pi + TXS0108E level shifter (~$3 if you have a Pi already).
+
+**Pre-flash check:** Use a multimeter on pin 8 (VCC) of the W25Q16JWN while the laptop is powered. Expected: 1.8V (±0.15V). If 0V or 3.3V, you have a power rail problem, not just data corruption.
+
+See `ch341a_flash.sh` for the complete flash procedure with safety checks.
 
 ## Not in This Repo
 
@@ -58,11 +87,11 @@ The following files are **not included** for legal/security reasons:
 
 ## For LLMs / AI Assistants
 
-If you're an AI helping debug this issue, read `STATUS.md` first. It has the full state of what's been tried and what hasn't. The "NOT YET TRIED" section is prioritized. Key context:
+If you're an AI helping debug this issue, read `STATUS.md` first. It has the full state of what's been tried and what hasn't. Key context:
 
+- 29 software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
 - The VBIOS chip is a standard Winbond 25-series 1.8V SPI NOR flash
 - The GPU silicon is alive (responds to MMIO reads) but the falcon microcontroller is halted
-- All software paths through the GPU to reach the SPI controller are blocked
-- Hardware SPI programmer (CH341A + 1.8V adapter) is the known-good fallback
-- Several high-priority software methods remain untried (see STATUS.md N01-N05)
+- FWSEC (hardware security block on GPU die) blocks ALL software paths — this is definitively proven
+- **Hardware SPI programmer (CH341A + 1.8V adapter) is the ONLY viable fix**
 

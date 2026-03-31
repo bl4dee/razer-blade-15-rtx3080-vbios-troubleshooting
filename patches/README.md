@@ -1,62 +1,39 @@
-# Nouveau Kernel Module Patches for VBIOS Recovery
+# Nouveau Patches for VBIOS Recovery (v5 — 8 patches across 5 files)
 
-These patches modify the Linux nouveau driver (kernel 6.19) to load a GPU VBIOS
-from a firmware file instead of requiring it from the GPU's corrupted SPI flash.
+## Patches (apply to Linux kernel 6.19 nouveau source)
 
-## The Patches
+| File | Patch | Purpose |
+|---|---|---|
+| `image.patch` | Accept 0x564E (LE "NV") signature | NVGI format VBIOS files start with "NV" in LE |
+| `shadow.patch` | Skip PCIR/checksum for firmware source | NVGI container has no standard PCIR at offset 0 |
+| `base.patch` | Skip preinit, non-fatal ctor/init/intr | DEVINIT hits NX page + FWSEC timeout; all errors non-fatal |
+| `gsp.patch` | Survive fwsec_sb_ctor failure | FWSEC can't verify VBIOS from corrupted SPI |
+| `fwsec.patch` | Survive fwsec_init failures | Multiple FWSEC calls patched to continue on error |
+| `tu102.patch` | Survive fwsec_sb/frts/sb_init failures | All FWSEC calls in Turing+ GSP init path non-fatal |
 
-### 001-accept-nvgi-le-signature.patch
-Adds `case 0x564e` (little-endian "NV") to the accepted ROM signatures in
-`nvkm/subdev/bios/image.c`. Modern NVIDIA VBIOS files use the NVGI container
-format which starts with bytes `4E 56 47 49` ("NVGI"). When read as a 16-bit
-LE value, this produces `0x564E`, which the stock driver doesn't recognize.
+**Note:** `tu102.patch` not generated yet — the tu102.c changes need fresh diff.
 
-### 002-firmware-no-pcir-validation.patch
-Modifies `shadow_fw` in `nvkm/subdev/bios/shadow.c` to set `no_pcir = true`
-and `ignore_checksum = true`. The NVGI format doesn't have a standard PCI ROM
-data structure (PCIR) at the expected offset — the PCIR is inside a sub-image
-at offset 0x9400. This patch skips PCIR validation for firmware-loaded VBIOS.
+## Test Results
 
-### 003-skip-preinit-failure.patch
-Changes `nvkm/engine/device/base.c` to continue initialization even when
-preinit (DEVINIT scripts) fails. On a GPU with corrupted SPI VBIOS, FWSEC
-hasn't unlocked the hardware, so DEVINIT register writes timeout (-ETIMEDOUT).
-Without this patch, the timeout aborts the entire init and prevents GSP boot.
+| Version | Patches | Result |
+|---|---|---|
+| v1 | sig only | `ROM signature (564e) unknown` — signature not recognized |
+| v2 | sig + no_pcir | `scored 4, using image from nvvbios.rom` — **VBIOS accepted!** BIT found, version detected. Preinit NX crash. |
+| v3 | +skip_preinit +fwsec_survive | `skipping preinit` — reached nvkm_gsp_fwsec_init! OOB warnings + fwsec failure survived. NULL deref in fwsec_frts. |
+| v4 | +ctor_nonfatal | nvkm_intr_install returning -22 blocked ctor. |
+| v5 | +intr_nonfatal +init_nonfatal +tu102_fwsec | Got through ctor→init→preinit→fwsec_init→fwsec_frts. Kernel tainted from earlier oops prevents clean test. |
 
-## How to Use
+## Next Step
 
+Reboot for clean kernel, then:
 ```bash
-# 1. Get kernel 6.19 nouveau source
-curl -sL "https://github.com/torvalds/linux/archive/refs/tags/v6.19.tar.gz" | \
-    tar xzf - --strip-components=4 "linux-6.19/drivers/gpu/drm/nouveau/"
-
-# 2. Apply patches
-cd nouveau
-for p in /path/to/patches/0*.patch; do
-    patch -p0 < "$p"
-done
-
-# 3. Build
-make -C /usr/src/kernels/$(uname -r) M=$(pwd) CONFIG_DRM_NOUVEAU=m modules
-
-# 4. Place VBIOS file
-sudo cp YourVBIOS.rom /lib/firmware/nvvbios.rom
-
-# 5. Load
 sudo modprobe mxm_wmi
-sudo insmod nouveau.ko config=NvBios=nvvbios.rom
+sudo insmod /home/tech/nouveau-patched-v5.ko config=NvBios=nvvbios.rom
+sudo dmesg | tail -60
 ```
 
-## Results So Far
+If more NULL derefs, add more survival patches. The goal: reach `r535_gsp_rpc_set_registry` (GSP boot + registry RPC).
 
-With patches 001+002, nouveau successfully:
-- Loaded VBIOS from `/lib/firmware/nvvbios.rom` via `request_firmware()`
-- Parsed the NVGI container format
-- Found the BIT (BIOS Information Table) header
-- Detected VBIOS version `32.4e.0a.1e.dd`
-- Scored the firmware source as 4 (valid)
+## Pre-built Module
 
-Preinit (DEVINIT scripts) timed out with -110 because FWSEC hasn't unlocked
-GPU register access. Patch 003 skips this failure to allow GSP boot to proceed.
-
-**Status: Testing patch 003 (requires clean reboot after previous kernel oops)**
+`/home/tech/nouveau-patched-v5.ko` (239MB, not in git — too large)

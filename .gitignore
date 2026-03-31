@@ -8,3 +8,5 @@ setup.sh
 # OS files
 .DS_Store
 Thumbs.db
+patches/nouveau-patched-v5.ko
+*.ko

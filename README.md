@@ -17,17 +17,35 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 - Every method tried, with exact commands, results, and timestamps
 - Every method NOT yet tried, with priority ranking and rationale
 
-## Files
+## Repository Structure
 
-| File | Description |
-|---|---|
-| `STATUS.md` | Master tracking: tried/untried methods with results |
-| `TROUBLESHOOTING_LOG.md` | Detailed narrative log of all sessions |
-| `PLAN.md` | Original attack plan with methods ranked by success probability |
-| `diagnose.sh` | GPU diagnostic script (lspci, dmesg, dmidecode, sysfs) |
-| `flash.sh` | Automated software flash (nvflash → sysfs → CH341A instructions) |
-| `ch341a_flash.sh` | Interactive hardware SPI flash script with safety checks |
-| `logs/` | Raw diagnostic and flash attempt output |
+```
+.
+├── README.md                    This file
+├── STATUS.md                    Master tracking: every method tried/untried
+├── TROUBLESHOOTING_LOG.md       Detailed narrative log (4 sessions, 30+ methods)
+├── docs/
+│   ├── DIAGRAM.md               Visual diagrams of the problem and architecture
+│   ├── PLAN.md                  Original attack plan
+│   └── WINDOWS_NVFLASH_PROCEDURE.md
+├── scripts/
+│   ├── diagnose.sh              GPU diagnostic (lspci, dmesg, dmidecode, sysfs)
+│   ├── flash.sh                 Automated software flash pipeline
+│   └── ch341a_flash.sh          Interactive hardware SPI flash with safety checks
+├── patches/                     Nouveau kernel module patches (8 total)
+│   ├── README.md                Patch descriptions and test results
+│   ├── image.patch              Accept NVGI LE signature
+│   ├── shadow.patch             Skip PCIR validation for firmware VBIOS
+│   ├── base.patch               Skip preinit + non-fatal ctor/init/intr
+│   ├── gsp.patch                Survive FWSEC sb_ctor failure
+│   └── fwsec.patch              Survive all FWSEC init failures
+├── logs/                        Raw diagnostic output
+│   ├── gpu_diagnostic_*.log     Hardware diagnostic captures
+│   ├── flash_*.log              Flash attempt logs
+│   └── diagnostic_attempt.log   MODS/MATS diagnostic attempt
+├── nvflash                      NVIDIA flash tool binary (v5.867.0)
+└── Razer.RTX3080.8192.210603.rom  Target VBIOS image (976KB)
+```
 
 ## Hardware Info
 

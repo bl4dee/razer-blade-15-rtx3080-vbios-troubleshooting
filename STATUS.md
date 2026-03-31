@@ -122,9 +122,8 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 ### T17 — Razer System BIOS Update
 - **When:** 2026-03-30
 - **How:** Downloaded Razer BIOS updater for RZ09-0409 from mysupport.razer.com. Ran from Windows. System BIOS updated from v1.06 to v2.x.
-- **Result:** BIOS version changed successfully. GPU status TBD — pending retest after BIOS update.
-- **Times tried:** 1
-- **Notes:** BIOS update did NOT include a separate VBIOS re-provisioning step. The dGPU VBIOS may or may not have been reflashed as part of the system BIOS update. Need to boot Linux and re-run diagnostics to check Device ID (249C vs 24DC) and falcon status.
+- **Result:** FAILED — System BIOS updated from v1.06 to v2.x successfully. GPU still shows Code 43, same error. Running the Razer updater again reports "up to date." BIOS update did NOT re-provision the dGPU VBIOS.
+- **Times tried:** 2 (update + re-run showing "up to date")
 
 ---
 

@@ -1,0 +1,560 @@
+========================================
+=== SYSTEM INFO
+========================================
+Mon Mar 30 20:59:32 UTC 2026
+Linux ubuntu 6.17.0-14-generic #14~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Thu Jan 15 15:52:10 UTC 2 x86_64 x86_64 x86_64 GNU/Linux
+
+========================================
+=== 1. NVIDIA GPU PCI STATUS (lspci -vnn)
+========================================
+01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB] [10de:249c] (rev a1) (prog-if 00 [VGA controller])
+	Subsystem: Razer USA Ltd. GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB] [1a58:2018]
+	Flags: fast devsel, IRQ 255, IOMMU group 17
+	Memory at 85000000 (32-bit, non-prefetchable) [disabled] [size=16M]
+	Memory at 6040000000 (64-bit, prefetchable) [disabled] [size=256M]
+	Memory at 6050000000 (64-bit, prefetchable) [disabled] [size=32M]
+	I/O ports at 3000 [disabled] [size=128]
+	Expansion ROM at 86000000 [disabled] [size=512K]
+	Capabilities: [60] Power Management version 3
+	Capabilities: [68] MSI: Enable- Count=1/1 Maskable- 64bit+
+	Capabilities: [78] Express Endpoint, MSI 00
+	Capabilities: [100] Virtual Channel
+	Capabilities: [250] Latency Tolerance Reporting
+	Capabilities: [258] L1 PM Substates
+	Capabilities: [128] Power Budgeting <?>
+	Capabilities: [420] Advanced Error Reporting
+	Capabilities: [600] Vendor Specific Information: ID=0001 Rev=1 Len=024 <?>
+	Capabilities: [900] Secondary PCI Express
+	Capabilities: [bb0] Physical Resizable BAR
+	Capabilities: [c1c] Physical Layer 16.0 GT/s <?>
+	Capabilities: [d00] Lane Margining at the Receiver <?>
+	Capabilities: [e00] Data Link Feature <?>
+	Kernel modules: nvidiafb, nouveau
+
+01:00.1 Audio device [0403]: NVIDIA Corporation GA104 High Definition Audio Controller [10de:228b] (rev a1)
+	Flags: bus master, fast devsel, latency 0, IRQ 17, IOMMU group 17
+	Memory at 86080000 (32-bit, non-prefetchable) [size=16K]
+	Capabilities: [60] Power Management version 3
+	Capabilities: [68] MSI: Enable- Count=1/1 Maskable- 64bit+
+	Capabilities: [78] Express Endpoint, MSI 00
+	Capabilities: [100] Advanced Error Reporting
+	Capabilities: [160] Data Link Feature <?>
+	Kernel driver in use: snd_hda_intel
+	Kernel modules: snd_hda_intel
+
+02:00.0 Non-Volatile memory controller [0108]: Samsung Electronics Co Ltd NVMe SSD Controller PM9A1/PM9A3/980PRO [144d:a80a] (prog-if 02 [NVM Express])
+	Subsystem: Samsung Electronics Co Ltd SSD 980 PRO [144d:a801]
+	Flags: bus master, fast devsel, latency 0, IRQ 16, IOMMU group 18
+	Memory at 86400000 (64-bit, non-prefetchable) [size=16K]
+	Capabilities: [40] Power Management version 3
+	Capabilities: [50] MSI: Enable- Count=1/32 Maskable- 64bit+
+	Capabilities: [70] Express Endpoint, MSI 00
+	Capabilities: [b0] MSI-X: Enable+ Count=130 Masked-
+	Capabilities: [100] Advanced Error Reporting
+	Capabilities: [168] Alternative Routing-ID Interpretation (ARI)
+	Capabilities: [178] Secondary PCI Express
+	Capabilities: [198] Physical Layer 16.0 GT/s <?>
+	Capabilities: [1bc] Lane Margining at the Receiver <?>
+	Capabilities: [214] Latency Tolerance Reporting
+	Capabilities: [21c] L1 PM Substates
+	Capabilities: [3a0] Data Link Feature <?>
+	Kernel driver in use: nvme
+	Kernel modules: nvme
+
+5a:00.0 Unassigned class [ff00]: Realtek Semiconductor Co., Ltd. RTS5260 PCI Express Card Reader [10ec:5260] (rev 01)
+
+GPU detected at bus address: 01:00.0
+
+========================================
+=== 2. GPU PCI CONFIG SPACE HEX DUMP (lspci -s 01:00.0 -xxx)
+========================================
+01:00.0 VGA compatible controller: NVIDIA Corporation GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB] (rev a1)
+00: de 10 9c 24 00 00 10 00 a1 00 00 03 10 00 80 00
+10: 00 00 00 85 0c 00 00 40 60 00 00 00 0c 00 00 50
+20: 60 00 00 00 01 30 00 00 00 00 00 00 58 1a 18 20
+30: 00 00 00 86 60 00 00 00 00 00 00 00 ff 01 00 00
+40: 58 1a 18 20 00 00 00 00 00 00 00 00 00 00 00 00
+50: 00 00 00 00 01 00 00 00 ce d6 23 00 00 00 00 00
+60: 01 68 03 48 08 00 00 00 05 78 80 00 00 00 00 00
+70: 00 00 00 00 00 00 00 00 10 00 02 00 e1 8d 2c 11
+80: 30 29 09 00 04 3d 45 00 42 01 81 10 00 00 00 00
+90: 00 00 00 00 00 00 00 00 00 00 00 00 13 08 07 00
+a0: 00 04 00 00 1e 00 80 01 04 00 00 00 00 00 00 00
+b0: 00 00 00 00 09 00 14 01 00 00 00 00 00 00 00 00
+c0: 00 00 00 00 00 00 00 00 11 00 05 00 00 00 b9 00
+d0: 00 00 ba 00 00 00 00 00 00 00 00 00 00 00 00 00
+e0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+f0: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+========================================
+=== 2b. GPU PCI VERBOSE (lspci -s 01:00.0 -vvv)
+========================================
+01:00.0 VGA compatible controller: NVIDIA Corporation GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB] (rev a1) (prog-if 00 [VGA controller])
+	Subsystem: Razer USA Ltd. GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB]
+	Control: I/O- Mem- BusMaster- SpecCycle- MemWINV- VGASnoop- ParErr- Stepping- SERR- FastB2B- DisINTx-
+	Status: Cap+ 66MHz- UDF- FastB2B- ParErr- DEVSEL=fast >TAbort- <TAbort- <MAbort- >SERR- <PERR- INTx-
+	Interrupt: pin A routed to IRQ 255
+	IOMMU group: 17
+	Region 0: Memory at 85000000 (32-bit, non-prefetchable) [disabled] [size=16M]
+	Region 1: Memory at 6040000000 (64-bit, prefetchable) [disabled] [size=256M]
+	Region 3: Memory at 6050000000 (64-bit, prefetchable) [disabled] [size=32M]
+	Region 5: I/O ports at 3000 [disabled] [size=128]
+	Expansion ROM at 86000000 [disabled] [size=512K]
+	Capabilities: [60] Power Management version 3
+		Flags: PMEClk- DSI- D1- D2- AuxCurrent=0mA PME(D0+,D1-,D2-,D3hot+,D3cold-)
+		Status: D0 NoSoftRst+ PME-Enable- DSel=0 DScale=0 PME-
+	Capabilities: [68] MSI: Enable- Count=1/1 Maskable- 64bit+
+		Address: 0000000000000000  Data: 0000
+	Capabilities: [78] Express (v2) Endpoint, MSI 00
+		DevCap:	MaxPayload 256 bytes, PhantFunc 0, Latency L0s unlimited, L1 <64us
+			ExtTag+ AttnBtn- AttnInd- PwrInd- RBE+ FLReset+ SlotPowerLimit 75W
+		DevCtl:	CorrErr- NonFatalErr- FatalErr- UnsupReq-
+			RlxdOrd+ ExtTag+ PhantFunc- AuxPwr- NoSnoop+ FLReset-
+			MaxPayload 256 bytes, MaxReadReq 512 bytes
+		DevSta:	CorrErr+ NonFatalErr- FatalErr- UnsupReq+ AuxPwr- TransPend-
+		LnkCap:	Port #0, Speed 16GT/s, Width x16, ASPM L0s L1, Exit Latency L0s <512ns, L1 <4us
+			ClockPM+ Surprise- LLActRep- BwNot- ASPMOptComp+
+		LnkCtl:	ASPM L1 Enabled; RCB 64 bytes, Disabled- CommClk+
+			ExtSynch- ClockPM+ AutWidDis- BWInt- AutBWInt-
+		LnkSta:	Speed 2.5GT/s (downgraded), Width x8 (downgraded)
+			TrErr- Train- SlotClk+ DLActive- BWMgmt- ABWMgmt-
+		DevCap2: Completion Timeout: Range AB, TimeoutDis+ NROPrPrP- LTR+
+			 10BitTagComp+ 10BitTagReq+ OBFF Via message, ExtFmt- EETLPPrefix-
+			 EmergencyPowerReduction Not Supported, EmergencyPowerReductionInit-
+			 FRS- TPHComp- ExtTPHComp-
+			 AtomicOpsCap: 32bit- 64bit- 128bitCAS-
+		DevCtl2: Completion Timeout: 50us to 50ms, TimeoutDis- LTR+ 10BitTagReq- OBFF Disabled,
+			 AtomicOpsCtl: ReqEn-
+		LnkCap2: Supported Link Speeds: 2.5-16GT/s, Crosslink- Retimer+ 2Retimers+ DRS-
+		LnkCtl2: Target Link Speed: 16GT/s, EnterCompliance- SpeedDis-
+			 Transmit Margin: Normal Operating Range, EnterModifiedCompliance- ComplianceSOS-
+			 Compliance Preset/De-emphasis: -6dB de-emphasis, 0dB preshoot
+		LnkSta2: Current De-emphasis Level: -6dB, EqualizationComplete- EqualizationPhase1-
+			 EqualizationPhase2- EqualizationPhase3- LinkEqualizationRequest-
+			 Retimer- 2Retimers- CrosslinkRes: unsupported
+	Capabilities: [100 v1] Virtual Channel
+		Caps:	LPEVC=0 RefClk=100ns PATEntryBits=1
+		Arb:	Fixed- WRR32- WRR64- WRR128-
+		Ctrl:	ArbSelect=Fixed
+		Status:	InProgress-
+		VC0:	Caps:	PATOffset=00 MaxTimeSlots=1 RejSnoopTrans-
+			Arb:	Fixed- WRR32- WRR64- WRR128- TWRR128- WRR256-
+			Ctrl:	Enable+ ID=0 ArbSelect=Fixed TC/VC=ff
+			Status:	NegoPending- InProgress-
+	Capabilities: [250 v1] Latency Tolerance Reporting
+		Max snoop latency: 3145728ns
+		Max no snoop latency: 3145728ns
+	Capabilities: [258 v1] L1 PM Substates
+		L1SubCap: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+ L1_PM_Substates+
+			  PortCommonModeRestoreTime=255us PortTPowerOnTime=10us
+		L1SubCtl1: PCI-PM_L1.2+ PCI-PM_L1.1+ ASPM_L1.2+ ASPM_L1.1+
+			   T_CommonMode=0us LTR1.2_Threshold=311296ns
+		L1SubCtl2: T_PwrOn=50us
+	Capabilities: [128 v1] Power Budgeting <?>
+	Capabilities: [420 v2] Advanced Error Reporting
+		UESta:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP- ECRC- UnsupReq- ACSViol-
+		UEMsk:	DLP- SDES- TLP- FCP- CmpltTO- CmpltAbrt- UnxCmplt- RxOF- MalfTLP- ECRC- UnsupReq- ACSViol-
+		UESvrt:	DLP+ SDES+ TLP- FCP+ CmpltTO- CmpltAbrt- UnxCmplt- RxOF+ MalfTLP+ ECRC- UnsupReq- ACSViol-
+		CESta:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+
+		CEMsk:	RxErr- BadTLP- BadDLLP- Rollover- Timeout- AdvNonFatalErr+
+		AERCap:	First Error Pointer: 00, ECRCGenCap- ECRCGenEn- ECRCChkCap- ECRCChkEn-
+			MultHdrRecCap- MultHdrRecEn- TLPPfxPres- HdrLogCap-
+		HeaderLog: 00000000 00000000 00000000 00000000
+	Capabilities: [600 v1] Vendor Specific Information: ID=0001 Rev=1 Len=024 <?>
+	Capabilities: [900 v1] Secondary PCI Express
+		LnkCtl3: LnkEquIntrruptEn- PerformEqu-
+		LaneErrStat: 0
+	Capabilities: [bb0 v1] Physical Resizable BAR
+		BAR 0: current size: 16MB, supported: 16MB
+		BAR 1: current size: 256MB, supported: 64MB 128MB 256MB
+		BAR 3: current size: 32MB, supported: 32MB
+	Capabilities: [c1c v1] Physical Layer 16.0 GT/s <?>
+	Capabilities: [d00 v1] Lane Margining at the Receiver <?>
+	Capabilities: [e00 v1] Data Link Feature <?>
+	Kernel modules: nvidiafb, nouveau
+
+
+========================================
+=== 3. KERNEL NVIDIA MESSAGES (dmesg | grep nvidia)
+========================================
+[   10.588822] input: HDA NVidia HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input15
+[   10.588989] input: HDA NVidia HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input16
+[   10.589113] input: HDA NVidia HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input17
+[   10.589234] input: HDA NVidia HDMI/DP,pcm=9 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input18
+
+========================================
+=== 4. ALL HARDWARE ERRORS (dmesg | grep error)
+========================================
+[    0.202537] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG2.WKEN], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202543] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202547] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG2._DSW], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202550] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202560] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG2._PR0], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202562] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202565] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG2._PR3], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202567] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202674] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG3.WKEN], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202676] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202680] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG3._DSW], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202682] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202692] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG3._PR0], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202693] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.202696] ACPI BIOS Error (bug): Failure creating named object [\_SB.PC00.PEG3._PR3], AE_ALREADY_EXISTS (20250404/dswload2-326)
+[    0.202698] ACPI Error: AE_ALREADY_EXISTS, During name lookup/catalog (20250404/psobject-220)
+[    0.230823] ACPI Error: No handler for Region [VRTC] ((____ptrval____)) [SystemCMOS] (20250404/evregion-131)
+[    0.230826] ACPI Error: Region SystemCMOS (ID=5) has no handler (20250404/exfldio-261)
+[    0.230832] ACPI Error: Aborting method \_SB.PC00.LPCB.EC0.RTEC due to previous error (AE_NOT_EXIST) (20250404/psparse-529)
+[    0.230836] ACPI Error: Aborting method \_SB.PC00.LPCB.EC0._REG due to previous error (AE_NOT_EXIST) (20250404/psparse-529)
+[    0.831414] RAS: Correctable Errors collector initialized.
+[   11.218592] sof-audio-pci-intel-tgl 0000:00:1f.3: codec #2 probe error, ret: -2
+[  591.235115] audit: type=1400 audit(1774903229.709:74): apparmor="DENIED" operation="change_onexec" class="file" info="label not found" error=-2 profile="unconfined" name="ubuntu_pro_apt_news" pid=7961 comm="(python3)"
+[  591.243906] audit: type=1400 audit(1774903229.718:75): apparmor="DENIED" operation="change_onexec" class="file" info="label not found" error=-2 profile="unconfined" name="ubuntu_pro_esm_cache" pid=7962 comm="(python3)"
+[ 1466.873855] ntfs3(nvme0n1p4): Mark volume as dirty due to NTFS errors
+
+========================================
+=== 5. PCI INITIALIZATION MESSAGES (dmesg | grep pci)
+========================================
+[    0.694821] pci 0000:01:00.0: Adding to iommu group 17
+[    0.694829] pci 0000:01:00.1: Adding to iommu group 17
+[    0.694836] pci 0000:02:00.0: Adding to iommu group 18
+[    0.694851] pci 0000:5a:00.0: Adding to iommu group 19
+[    0.694865] pci 0000:5b:00.0: Adding to iommu group 20
+[    0.695885] PCI-DMA: Using software bounce buffering for IO (SWIOTLB)
+[    0.714450] pcieport 0000:00:01.0: PME: Signaling with IRQ 124
+[    0.714618] pcieport 0000:00:01.1: PME: Signaling with IRQ 125
+[    0.714779] pcieport 0000:00:07.0: PME: Signaling with IRQ 126
+[    0.714794] pcieport 0000:00:07.0: pciehp: Slot #0 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+[    0.715125] pcieport 0000:00:07.2: PME: Signaling with IRQ 127
+[    0.715137] pcieport 0000:00:07.2: pciehp: Slot #0 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+[    0.715374] pcieport 0000:00:1b.0: PME: Signaling with IRQ 128
+[    0.715388] pcieport 0000:00:1b.0: pciehp: Slot #0 AttnBtn- PwrCtrl- MRL- AttnInd- PwrInd- HotPlug+ Surprise+ Interlock- NoCompl+ IbPresDis- LLActRep+
+[    0.715626] pcieport 0000:00:1b.2: PME: Signaling with IRQ 129
+[    0.715814] pcieport 0000:00:1b.3: PME: Signaling with IRQ 130
+[    0.970682] rtsx_pci 0000:5a:00.0: enabling device (0000 -> 0002)
+[    0.991592] nvme nvme0: pci function 0000:02:00.0
+[    1.075055] input: ELAN0406:00 04F3:30A6 Mouse as /devices/pci0000:00/0000:00:15.0/i2c_designware.0/i2c-0/i2c-ELAN0406:00/0018:04F3:30A6.0001/input/input4
+[    1.075202] input: ELAN0406:00 04F3:30A6 Touchpad as /devices/pci0000:00/0000:00:15.0/i2c_designware.0/i2c-0/i2c-ELAN0406:00/0018:04F3:30A6.0001/input/input6
+[    1.141643] input: ELAN0406:00 04F3:30A6 Mouse as /devices/pci0000:00/0000:00:15.0/i2c_designware.0/i2c-0/i2c-ELAN0406:00/0018:04F3:30A6.0001/input/input7
+[    1.141700] input: ELAN0406:00 04F3:30A6 Touchpad as /devices/pci0000:00/0000:00:15.0/i2c_designware.0/i2c-0/i2c-ELAN0406:00/0018:04F3:30A6.0001/input/input9
+[    1.759705] input: Razer Razer Blade as /devices/pci0000:00/0000:00:14.0/usb3/3-7/3-7:1.0/0003:1532:0276.0002/input/input10
+[    1.812037] input: Razer Razer Blade Keyboard as /devices/pci0000:00/0000:00:14.0/usb3/3-7/3-7:1.1/0003:1532:0276.0003/input/input11
+[    1.863319] input: Razer Razer Blade as /devices/pci0000:00/0000:00:14.0/usb3/3-7/3-7:1.1/0003:1532:0276.0003/input/input12
+[    1.865407] input: Razer Razer Blade as /devices/pci0000:00/0000:00:14.0/usb3/3-7/3-7:1.2/0003:1532:0276.0004/input/input13
+[    8.730752] i801_smbus 0000:00:1f.4: SMBus using PCI interrupt
+[    9.079822] iwlwifi 0000:5b:00.0: PCI dev 2725/0024, rev=0x420, rfid=0x10d000
+[   10.588822] input: HDA NVidia HDMI/DP,pcm=3 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input15
+[   10.588989] input: HDA NVidia HDMI/DP,pcm=7 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input16
+[   10.589113] input: HDA NVidia HDMI/DP,pcm=8 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input17
+[   10.589234] input: HDA NVidia HDMI/DP,pcm=9 as /devices/pci0000:00/0000:00:01.0/0000:01:00.1/sound/card0/input18
+[   11.187284] sof-audio-pci-intel-tgl 0000:00:1f.3: enabling device (0000 -> 0002)
+[   11.187612] sof-audio-pci-intel-tgl 0000:00:1f.3: DSP detected with PCI class/subclass/prog-if 0x040100
+[   11.190341] sof-audio-pci-intel-tgl 0000:00:1f.3: use msi interrupt mode
+[   11.218592] sof-audio-pci-intel-tgl 0000:00:1f.3: codec #2 probe error, ret: -2
+[   11.218901] sof-audio-pci-intel-tgl 0000:00:1f.3: hda codecs found, mask 1
+[   11.218904] sof-audio-pci-intel-tgl 0000:00:1f.3: using HDA machine driver skl_hda_dsp_generic now
+[   11.218907] sof-audio-pci-intel-tgl 0000:00:1f.3: BT link detected in NHLT tables: 0x0
+[   11.218909] sof-audio-pci-intel-tgl 0000:00:1f.3: DMICs detected in NHLT tables: 4
+[   11.265861] sof-audio-pci-intel-tgl 0000:00:1f.3: Firmware paths/files for ipc type 0:
+[   11.265868] sof-audio-pci-intel-tgl 0000:00:1f.3:  Firmware file:     intel/sof/sof-tgl-h.ri
+[   11.265871] sof-audio-pci-intel-tgl 0000:00:1f.3:  Topology file:     intel/sof-tplg/sof-hda-generic-4ch.tplg
+[   11.267607] sof-audio-pci-intel-tgl 0000:00:1f.3: Firmware info: version 2:2:0-57864
+[   11.267611] sof-audio-pci-intel-tgl 0000:00:1f.3: Firmware: ABI 3:22:1 Kernel ABI 3:23:1
+[   11.370622] sof-audio-pci-intel-tgl 0000:00:1f.3: Firmware info: version 2:2:0-57864
+[   11.370628] sof-audio-pci-intel-tgl 0000:00:1f.3: Firmware: ABI 3:22:1 Kernel ABI 3:23:1
+[   11.385756] sof-audio-pci-intel-tgl 0000:00:1f.3: Topology: ABI 3:22:1 Kernel ABI 3:23:1
+[   11.444893] input: sof-hda-dsp Mic as /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card1/input19
+[   11.445023] input: sof-hda-dsp Headphone as /devices/pci0000:00/0000:00:1f.3/skl_hda_dsp_generic/sound/card1/input20
+
+========================================
+=== 6. SYSTEM IDENTIFICATION (dmidecode -t system)
+========================================
+# dmidecode 3.5
+Getting SMBIOS data from sysfs.
+SMBIOS 3.3.0 present.
+
+Handle 0x0001, DMI type 1, 27 bytes
+System Information
+	Manufacturer: Razer
+	Product Name: Blade 15 Advanced Model (Mid 2021) - RZ09-0409
+	Version: 7.04
+	Serial Number: REDACTED
+	UUID: 64316439-3334-3265-3331-663634626261
+	Wake-up Type: Power Switch
+	SKU Number: RZ09-0409CEC3
+	Family: 1A582018 Razer Blade
+
+Handle 0x0010, DMI type 12, 5 bytes
+System Configuration Options
+	Option 1:  
+
+Handle 0x0011, DMI type 32, 20 bytes
+System Boot Information
+	Status: No errors detected
+
+Handle 0x0057, DMI type 32, 11 bytes
+System Boot Information
+	Status: No errors detected
+
+
+========================================
+=== 7. BIOS VERSION INFO (dmidecode -t bios)
+========================================
+# dmidecode 3.5
+Getting SMBIOS data from sysfs.
+SMBIOS 3.3.0 present.
+
+Handle 0x0000, DMI type 0, 26 bytes
+BIOS Information
+	Vendor: Razer
+	Version: 1.06
+	Release Date: 06/10/2021
+	Address: 0xF0000
+	Runtime Size: 64 kB
+	ROM Size: 16 MB
+	Characteristics:
+		PCI is supported
+		BIOS is upgradeable
+		BIOS shadowing is allowed
+		Boot from CD is supported
+		Selectable boot is supported
+		BIOS ROM is socketed
+		EDD is supported
+		Japanese floppy for NEC 9800 1.2 MB is supported (int 13h)
+		Japanese floppy for Toshiba 1.2 MB is supported (int 13h)
+		5.25"/360 kB floppy services are supported (int 13h)
+		5.25"/1.2 MB floppy services are supported (int 13h)
+		3.5"/720 kB floppy services are supported (int 13h)
+		3.5"/2.88 MB floppy services are supported (int 13h)
+		Print screen service is supported (int 5h)
+		Serial services are supported (int 14h)
+		Printer services are supported (int 17h)
+		CGA/mono video services are supported (int 10h)
+		USB legacy is supported
+		BIOS boot specification is supported
+		Targeted content distribution is supported
+		UEFI is supported
+	BIOS Revision: 1.6
+	Firmware Revision: 1.2
+
+Handle 0x0058, DMI type 13, 22 bytes
+BIOS Language Information
+	Language Description Format: Long
+	Installable Languages: 1
+		en|US|iso8859-1
+	Currently Installed Language: en|US|iso8859-1
+
+
+========================================
+=== 8. DETAILED GRAPHICS CARD INFO (hwinfo --gfxcard)
+========================================
+16: PCI 100.0: 0300 VGA compatible controller (VGA)
+  [Created at pci.386]
+  Unique ID: VCu0.GhCCN06BMYA
+  Parent ID: vSkL._H_xidnntgE
+  SysFS ID: /devices/pci0000:00/0000:00:01.0/0000:01:00.0
+  SysFS BusID: 0000:01:00.0
+  Hardware Class: graphics card
+  Model: "nVidia GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB]"
+  Vendor: pci 0x10de "nVidia Corporation"
+  Device: pci 0x249c "GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB]"
+  SubVendor: pci 0x1a58 "Razer USA Ltd."
+  SubDevice: pci 0x2018 
+  Revision: 0xa1
+  Memory Range: 0x85000000-0x85ffffff (rw,non-prefetchable,disabled)
+  Memory Range: 0x6040000000-0x604fffffff (ro,non-prefetchable,disabled)
+  Memory Range: 0x6050000000-0x6051ffffff (ro,non-prefetchable,disabled)
+  I/O Ports: 0x3000-0x3fff (rw,disabled)
+  Memory Range: 0x86000000-0x8607ffff (ro,non-prefetchable,disabled)
+  IRQ: 255 (no events)
+  Module Alias: "pci:v000010DEd0000249Csv00001A58sd00002018bc03sc00i00"
+  Driver Info #0:
+    Driver Status: nvidiafb is not active
+    Driver Activation Cmd: "modprobe nvidiafb"
+  Driver Info #1:
+    Driver Status: nouveau is active
+    Driver Activation Cmd: "modprobe nouveau"
+  Config Status: cfg=new, avail=yes, need=no, active=unknown
+  Attached to: #11 (PCI bridge)
+
+30: PCI 02.0: 0300 VGA compatible controller (VGA)
+  [Created at pci.386]
+  Unique ID: _Znp.o3lBa+bVLZD
+  SysFS ID: /devices/pci0000:00/0000:00:02.0
+  SysFS BusID: 0000:00:02.0
+  Hardware Class: graphics card
+  Device Name: "Onboard - Video"
+  Model: "Intel TigerLake-H GT1 [UHD Graphics]"
+  Vendor: pci 0x8086 "Intel Corporation"
+  Device: pci 0x9a60 "TigerLake-H GT1 [UHD Graphics]"
+  SubVendor: pci 0x1a58 "Razer USA Ltd."
+  SubDevice: pci 0x2018 
+  Revision: 0x01
+  Memory Range: 0x6052000000-0x6052ffffff (rw,non-prefetchable)
+  Memory Range: 0x4000000000-0x400fffffff (ro,non-prefetchable)
+  I/O Ports: 0x4000-0x403f (rw)
+  Memory Range: 0x000c0000-0x000dffff (rw,non-prefetchable,disabled)
+  IRQ: 255 (no events)
+  Module Alias: "pci:v00008086d00009A60sv00001A58sd00002018bc03sc00i00"
+  Driver Info #0:
+    Driver Status: i915 is not active
+    Driver Activation Cmd: "modprobe i915"
+  Driver Info #1:
+    Driver Status: xe is not active
+    Driver Activation Cmd: "modprobe xe"
+  Config Status: cfg=new, avail=yes, need=no, active=unknown
+
+Primary display adapter: #16
+
+========================================
+=== 9. NVIDIA DRIVER VERSION
+========================================
+(nvidia kernel module not loaded — expected for flash)
+
+========================================
+=== 10. FULL PCIe TOPOLOGY TREE (lspci -t)
+========================================
+-[0000:00]-+-00.0
+           +-01.0-[01]--+-00.0
+           |            \-00.1
+           +-01.1-[02]----00.0
+           +-02.0
+           +-04.0
+           +-07.0-[03-2d]--
+           +-07.2-[2e-58]--
+           +-08.0
+           +-0a.0
+           +-0d.0
+           +-0d.2
+           +-0d.3
+           +-14.0
+           +-14.2
+           +-15.0
+           +-16.0
+           +-1b.0-[59]--
+           +-1b.2-[5a]----00.0
+           +-1b.3-[5b]----00.0
+           +-1f.0
+           +-1f.3
+           +-1f.4
+           \-1f.5
+
+========================================
+=== 11. TEMPERATURE READINGS (sensors)
+========================================
+iwlwifi_1-virtual-0
+Adapter: Virtual device
+temp1:        +36.0°C  
+
+nvme-pci-0200
+Adapter: PCI adapter
+Composite:    +39.9°C  (low  = -273.1°C, high = +80.8°C)
+                       (crit = +84.8°C)
+Sensor 1:     +39.9°C  (low  = -273.1°C, high = +65261.8°C)
+Sensor 2:     +41.9°C  (low  = -273.1°C, high = +65261.8°C)
+
+acpitz-acpi-0
+Adapter: ACPI interface
+temp1:        +27.8°C  
+
+coretemp-isa-0000
+Adapter: ISA adapter
+Package id 0:  +54.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 0:        +48.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 1:        +50.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 2:        +48.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 3:        +48.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 4:        +49.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 5:        +50.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 6:        +50.0°C  (high = +100.0°C, crit = +100.0°C)
+Core 7:        +47.0°C  (high = +100.0°C, crit = +100.0°C)
+
+BAT0-acpi-0
+Adapter: ACPI interface
+in0:          15.74 V  
+curr1:         2.52 A  
+
+acpi_fan-isa-0000
+Adapter: ISA adapter
+fan1:             N/A
+
+
+========================================
+=== 12. GPU ROM SYSFS ACCESS
+========================================
+Searching for GPU ROM sysfs entries...
+-rw------- 1 root root 131072 Mar 30 20:34 /sys/bus/pci/devices/0000:00:02.0/rom
+-rw------- 1 root root 524288 Mar 30 20:34 /sys/bus/pci/devices/0000:01:00.0/rom
+
+GPU sysfs path: /sys/bus/pci/devices/0000:01:00.0
+Directory exists: YES
+-rw------- 1 root root 524288 Mar 30 20:59 /sys/bus/pci/devices/0000:01:00.0/rom
+ROM file: ACCESSIBLE
+-rw-r--r-- 1 root root 4096 Mar 30 13:31 /sys/bus/pci/devices/0000:01:00.0/config
+Config file: ACCESSIBLE
+0x10de
+ (vendor)
+0x249c
+ (device)
+0x1a58
+ (subsystem_vendor)
+0x2018
+ (subsystem_device)
+0x030000
+ (class)
+2.5 GT/s PCIe
+ (current_link_speed)
+8
+ (current_link_width)
+16.0 GT/s PCIe
+ (max_link_speed)
+16
+ (max_link_width)
+
+========================================
+=== 13. GPU PCI CONFIG READABILITY
+========================================
+Config file size: 4096 bytes
+Config readable: YES
+First 64 bytes (hex):
+00000000: de10 9c24 0000 1000 a100 0003 1000 8000  ...$............
+00000010: 0000 0085 0c00 0040 6000 0000 0c00 0050  .......@`......P
+00000020: 6000 0000 0130 0000 0000 0000 581a 1820  `....0......X.. 
+00000030: 0000 0086 6000 0000 0000 0000 ff01 0000  ....`...........
+
+========================================
+=== 14. LOADED KERNEL MODULES (GPU related)
+========================================
+drm_gpusvm_helper      36864  0
+drm_suballoc_helper    24576  0
+nouveau              3088384  0
+mxm_wmi                12288  1 nouveau
+gpu_sched              65536  1 nouveau
+drm_gpuvm              49152  1 nouveau
+drm_buddy              28672  0
+drm_ttm_helper         16384  1 nouveau
+ttm                   126976  2 drm_ttm_helper,nouveau
+drm_exec               12288  2 drm_gpuvm,nouveau
+drm_display_helper    290816  1 nouveau
+cec                    98304  1 drm_display_helper
+i2c_algo_bit           16384  1 nouveau
+video                  77824  1 nouveau
+wmi                    28672  4 video,wmi_bmof,mxm_wmi,nouveau
+
+========================================
+=== 15. IOMMU GROUPS (useful for GPU passthrough context)
+========================================
+IOMMU Group 17: 01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA104M [GeForce RTX 3080 Mobile / Max-Q 8GB/16GB] [10de:249c] (rev a1)
+IOMMU Group 17: 01:00.1 Audio device [0403]: NVIDIA Corporation GA104 High Definition Audio Controller [10de:228b] (rev a1)
+
+========================================
+=== DIAGNOSTIC COMPLETE
+========================================
+Output saved to: gpu_diagnostic_20260330_205932.log
+
+KEY THINGS TO CHECK:
+  - Does lspci show the NVIDIA GPU at all? (If not: GPU dead or disabled)
+  - What Device ID is reported? (249C = fallback/corrupted, 24DC = normal)
+  - PCIe link speed/width (x8 1.1 = degraded, x16 4.0 = normal)
+  - Any 'AER' or 'error' messages related to the GPU address
+  - Is the ROM file accessible via sysfs?

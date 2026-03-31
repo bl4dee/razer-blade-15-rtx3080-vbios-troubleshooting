@@ -1,0 +1,18 @@
+# NVIDIA proprietary binaries
+nvflash
+nvflash64.exe
+
+# VBIOS ROM files (copyrighted NVIDIA firmware)
+*.rom
+*.bin
+
+# Credentials and secrets
+credentials.json
+*.nmconnection
+
+# Setup scripts with hardcoded credentials
+setup.sh
+
+# OS files
+.DS_Store
+Thumbs.db

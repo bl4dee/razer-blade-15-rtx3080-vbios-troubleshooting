@@ -151,92 +151,75 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 
 ---
 
+## RULED OUT (researched, not attempted)
+
+### N03 — nvflashk
+- **Why ruled out:** Windows-only binary. Only bypasses board ID/device ID/subsystem ID mismatch checks — identical underlying SPI probe code to stock nvflash. Hits the same halted falcon wall. No benefit over `-6 --overridesub` already tried in T05/T21.
+- **Ruled out:** 2026-03-31
+
+### N05 — nouveau NvBios/ForcePost
+- **Why ruled out:** Kernel 6.19 nouveau uses GSP RM firmware (570.144). NvBios and NvForcePost parameters do not exist in this version — the classic file-loading code path was removed when nouveau moved to GSP-based init. Would require kernel ≤5.19 with pre-GSP nouveau.
+- **Ruled out:** 2026-03-31
+
+### N07 — ACPI _ROM Extraction
+- **Why ruled out:** Decompiled and searched DSDT + all 13 SSDTs (2026-03-31). No `_ROM` method exists in any table. System BIOS does not hold a GPU VBIOS copy via ACPI. See T18.
+- **Ruled out:** 2026-03-31
+
+---
+
 ## NOT YET TRIED
 
-### N02 — nvflash on Windows ⬅ NEXT PRIORITY
+### N02 — nvflash on Windows ⬅ NEXT
 - **Priority:** HIGH
-- **How:** Reboot into Windows (on nvme0n1p4 "Blade 15", Boot0000 in EFI). Download nvflash64.exe + Razer.RTX3080.8192.210603.rom. Run as Administrator. Try: `nvflash64.exe Razer.RTX3080.8192.210603.rom` and with `-6 --overridesub`.
-- **Why it might work:** UEFI firmware POSTs the GPU via GOP before any driver loads. If UEFI partially initializes the falcon (even minimally), Windows nvflash may find the EEPROM accessible. Different driver backend (Windows nvflash uses WDDM kernel driver shim, not raw /dev/mem BAR0).
-- **Risk:** Low — worst case is same EEPROM not found error
-- **Status:** NOT TRIED
-- **Result:**
-- **Note:** Windows partition confirmed present on nvme0n1p4. EFI has Windows Boot Manager as Boot0000.
+- **How:** Reboot into Windows (nvme0n1p4 "Blade 15", Boot0000 in EFI). Download nvflash64.exe. Run as Administrator with the ROM file.
+- **Why it might work:** UEFI POSTs the GPU via GOP before any driver loads — different code path from Linux. If UEFI partially initializes the falcon, Windows nvflash (WDDM shim, not raw /dev/mem) may reach the EEPROM.
+- **Risk:** Low — worst case same EEPROM not found error
+- **See:** WINDOWS_NVFLASH_PROCEDURE.md for step-by-step
 
-### N03 — nvflashk — RULED OUT
-- **Priority:** SKIP
-- **Why skipped:** Confirmed (2026-03-31): nvflashk is Windows-only and only bypasses board ID/device ID/subsystem ID mismatch checks. It does NOT have different EEPROM detection logic — the underlying SPI probe code is identical to stock nvflash. Will hit the same halted falcon wall. No benefit over `-6 --overridesub` already tried in T05/T21.
-- **Status:** RULED OUT — will not help with halted falcon
-
-### N04 — NVIDIA 470 Proprietary Driver — LOW VALUE
-- **Priority:** LOW (was HIGH — downgraded)
-- **How:** Requires kernel ≤5.19 (470.xx does not support kernel 6.19). Would need to install an old kernel separately.
-- **Why downgraded:** Even if 470 doesn't use GSP, it still needs to read VBIOS from hardware during init. The falcon is halted, so the VBIOS read will fail regardless of which driver does it. BIOS-less init for Ampere is not something 470 supports.
-- **Status:** NOT TRIED — low value, skip unless N02 fails and CH341A unavailable
-
-### N05 — nouveau NvBios/ForcePost — BLOCKED
-- **Priority:** BLOCKED
-- **Why blocked:** Fedora 43 kernel 6.19 ships nouveau with GSP RM firmware (570.144). Confirmed 2026-03-31: NvBios and NvForcePost parameters are NOT available as module parameters. The `config=` string path doesn't expose them either. The classic NvBios file-loading code path was removed when nouveau moved to GSP-based init. Would require an older kernel (≤5.19) with pre-GSP nouveau.
-- **Status:** BLOCKED by GSP-based nouveau in kernel 6.19
+### N04 — NVIDIA 470 Proprietary Driver
+- **Priority:** LOW
+- **How:** Requires kernel ≤5.19 (470.xx doesn't support kernel 6.19). Would need an old kernel installed alongside.
+- **Why it probably won't help:** 470 doesn't use GSP, but still reads VBIOS from hardware during init. The falcon is halted — the read fails regardless of which driver does it.
 
 ### N06 — Boot Parameter Combinations
 - **Priority:** LOW
-- **How:** Add to kernel cmdline at GRUB prompt: `iommu=off iomem=relaxed pcie_aspm=off`
-- **Why it might help:** iomem=relaxed enables broader /dev/mem MMIO access. pcie_aspm=off prevents PCIe power states interfering. iommu=off removes VT-d restrictions.
-- **Why it probably won't:** The IOMMU is already permitting BAR0 access (direct reads work). The fundamental issue is the halted falcon, not access restrictions.
-- **Status:** NOT TRIED — worth one attempt at next reboot before Windows test
+- **How:** Add at GRUB prompt: `iommu=off iomem=relaxed pcie_aspm=off`
+- **Why it probably won't help:** BAR0 access already works fine (direct reads confirmed). The halted falcon is the blocker, not access restrictions.
 
-### N07 — ACPI _ROM — RULED OUT
-- **Priority:** SKIP
-- **Why ruled out:** T18 (2026-03-31): Decompiled and searched all ACPI tables (DSDT + 13 SSDTs). No `_ROM` method exists. System BIOS does not hold a GPU VBIOS copy accessible via ACPI. Dead end.
-- **Status:** RULED OUT
-
-### N08 — Older nvflash Versions
+### N08 — Older nvflash Versions (5.118, 5.314, 5.590)
 - **Priority:** LOW
-- **How:** Download nvflash v5.118, v5.314, v5.590 from TechPowerUp. Try each with standard and -6 flags.
-- **Why it probably won't help:** The EEPROM detection failure comes from falcon registers returning BADF (uninitialized), not from the EEPROM database. Older versions use the same detection path.
-- **Status:** NOT TRIED — low priority
-
-### N09 — PCI Remove/Rescan — DONE, FAILED
-- **Status:** FAILED (T19, 2026-03-31)
-
-### N10 — envytools — DONE, FAILED
-- **Status:** FAILED (T20, 2026-03-31)
+- **How:** Download from TechPowerUp, try with standard and `-6` flags.
+- **Why it probably won't help:** The failure is falcon registers returning BADF — not the EEPROM detection database. All versions hit the same wall.
 
 ### N11 — devmem2 / Direct SPI Register Writes
 - **Priority:** LOW
-- **How:** Boot with `iomem=relaxed`. Use devmem2 to write to GPU BAR0+0xE100 (SPI controller). Target SPI CSR registers to force-enable SPI without falcon.
-- **Why probably won't work:** The SPI controller MMIO registers (0xE100+) return BADF because the falcon hardware block that gates them is halted. Writing to these registers has no effect without the falcon running.
-- **Status:** NOT TRIED
+- **How:** Boot with `iomem=relaxed`. Use devmem2 to write directly to BAR0+0xE100 (SPI controller registers).
+- **Why it probably won't work:** SPI controller registers return BADF because the falcon hardware block gating them is halted. Writes have no effect without a running falcon.
 
-### N12 — OMGVflash
+### N12 — OMGVflash (Windows, by Veii)
 - **Priority:** LOW
-- **How:** Windows tool by Veii. Download and run as admin.
-- **Why probably won't work:** Same falcon dependency. OMGVflash's "bypass" is for EEPROM write-protect bits, not halted falcon state.
-- **Status:** NOT TRIED
+- **Why it probably won't work:** OMGVflash bypasses EEPROM write-protect bits — not the halted falcon state. Same root blocker.
 
 ### N13 — VFIO GPU Passthrough to Windows VM
 - **Priority:** VERY LOW
-- **Why:** The GPU enters the VM in the same halted state. OVMF cannot re-POST it without a valid VBIOS. Very complex setup for almost certain failure.
-- **Status:** NOT TRIED
+- **Why:** GPU enters VM in the same halted state. OVMF cannot POST it without a valid VBIOS. Complex setup, near-certain failure.
 
 ### N14 — DOS-Mode nvflash
 - **Priority:** LOW
-- **How:** FreeDOS bootable USB with nvflash DOS binary. Boot and flash.
-- **Why it might work:** At DOS boot, UEFI has already run. If UEFI partially initialized the falcon, nvflash under DOS might find the EEPROM accessible (same theory as N02 but without Windows overhead).
-- **Status:** NOT TRIED — simpler version of the UEFI-init theory
+- **How:** FreeDOS bootable USB with nvflash DOS binary.
+- **Why it might work:** UEFI has already run by the time DOS boots — same UEFI-init theory as N02 but without Windows overhead.
 
 ### N15 — CH341A Hardware SPI Programmer ⬅ DEFINITIVE SOLUTION
-- **Priority:** FALLBACK — order now if N02 fails
-- **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN chip.
+- **Priority:** FALLBACK — order now, do after N02
+- **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN.
 - **Why it works:** Bypasses the GPU and falcon entirely. Talks SPI directly to the flash chip. ~95% success rate.
-- **CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V output WILL destroy the chip. Must use 1.8V adapter board.
+- **CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V WILL destroy it. 1.8V adapter is mandatory.
 - **What to buy:**
-  - CH341A USB programmer (any): ~$8–12
-  - 1.8V adapter board (sometimes called "1.8V BIOS chip adapter"): ~$5–8
+  - CH341A USB programmer: ~$8–12
+  - 1.8V adapter board: ~$5–8
   - SOIC8/SOP8 test clip with ribbon cable: ~$5–8
-  - Total: ~$20–28 on Amazon, or ~$15 on AliExpress (slower shipping)
-- **Resources:** See ch341a_flash.sh for exact flashrom commands
-- **Status:** NOT TRIED — hardware not yet purchased
+  - Total: ~$20–28 Amazon / ~$15 AliExpress
+- **See:** ch341a_flash.sh for exact flashrom commands
 
 ---
 

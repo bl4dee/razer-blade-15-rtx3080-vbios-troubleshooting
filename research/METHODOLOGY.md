@@ -44,26 +44,15 @@ sudo modprobe nouveau NVreg_RegistryDwords="$(python3 -c "print('R'*100 + '=1')"
 # Look for: different error messages, GSP crash indicators, changed PRIV_ERR_ADDR
 ```
 
-### Lead B: NULL Pointer Deref in VBIOS Parsing (HOST-side, confirmed bug)
+### Lead B: Host-side VBIOS Parsing Bug (confirmed, reported to NVIDIA PSIRT)
 
-**The bug:** `s_vbiosNewFlcnUcodeFromDesc()` returns `NV_OK` even when inner parsing fails, with `*ppFlcnUcode = NULL`. Caller assumes success and dereferences NULL.
+A confirmed code defect was found in the open-source NVIDIA driver's VBIOS
+parsing code. Details have been reported to NVIDIA PSIRT and are not included
+in this public repository. See `/home/tech/NVIDIA_PSIRT_REPORT_DRAFT.md` for
+the full report.
 
 **File:** `src/nvidia/src/kernel/gpu/gsp/kernel_gsp_fwsec.c` in open-gpu-kernel-modules
-
-**Trigger:** Corrupted VBIOS data on SPI flash (we have this!). When the NVIDIA proprietary driver (not nouveau) loads and calls `kgspParseFwsecUcodeFromVbiosImg_IMPL`, the V3 descriptor parsing fails, returns NV_OK with NULL, and the caller dereferences it.
-
-**To verify:**
-1. Install the NVIDIA proprietary driver (from RPM Fusion or .run file)
-2. Load it: `sudo modprobe nvidia`
-3. Check dmesg for kernel NULL pointer dereference / oops
-4. The crash trace will show the exact caller that dereferences the NULL pointer
-
-**Severity:** Kernel NULL pointer dereference. DoS (kernel panic). On systems with `vm.mmap_min_addr=0`, potentially exploitable for kernel code execution.
-
-**For bug bounty:** Report to NVIDIA PSIRT (psirt@nvidia.com) or via HackerOne. Include:
-- The exact code path (s_vbiosNewFlcnUcodeFromDesc always returns NV_OK)
-- The trigger (corrupted VBIOS on SPI flash)
-- Impact: kernel panic when driver loads on a system with physically tampered GPU
+**Trigger:** Corrupted VBIOS data on SPI flash
 
 ### Lead C: VBIOS Descriptor Parsing Attack Surface (HOST-side)
 

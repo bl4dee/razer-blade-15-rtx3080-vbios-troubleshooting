@@ -1,11 +1,3 @@
-# NVIDIA proprietary binaries
-nvflash
-nvflash64.exe
-
-# VBIOS ROM files (copyrighted NVIDIA firmware)
-*.rom
-*.bin
-
 # Credentials and secrets
 credentials.json
 *.nmconnection

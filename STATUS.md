@@ -6,6 +6,7 @@
 - **Device ID:** 10DE:249C (silicon fallback — should be 24DC with valid VBIOS)
 - **Subsystem:** 1A58:2018 (Razer)
 - **Flash Chip:** Winbond W25Q16JWN (1.8V SOP8, 16Mbit/2MB)
+- **System BIOS:** Updated from v1.06 to v2.x via Razer updater tool (2026-03-30)
 - **Symptom:** Code 43, GPU-Z shows "Unknown" BIOS, 0 MHz clocks, 0 MB memory
 - **VBIOS File:** Razer.RTX3080.8192.210603.rom (TechPowerUp #235669, v94.04.55.00.92)
 - **VBIOS MD5:** f458d34324bfd843bee5107006a0e70f
@@ -118,18 +119,16 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** nvflash tries to load `nvtool` kernel module (unavailable), falls back to /dev/mem BAR0 mmap at 0x85000000, reads registers, finds falcon halted, gives up. Supports `--spiclkshmoo` suggesting SPI access goes through falcon microcode.
 - **Times tried:** 1
 
+### T17 — Razer System BIOS Update
+- **When:** 2026-03-30
+- **How:** Downloaded Razer BIOS updater for RZ09-0409 from mysupport.razer.com. Ran from Windows. System BIOS updated from v1.06 to v2.x.
+- **Result:** BIOS version changed successfully. GPU status TBD — pending retest after BIOS update.
+- **Times tried:** 1
+- **Notes:** BIOS update did NOT include a separate VBIOS re-provisioning step. The dGPU VBIOS may or may not have been reflashed as part of the system BIOS update. Need to boot Linux and re-run diagnostics to check Device ID (249C vs 24DC) and falcon status.
+
 ---
 
 ## NOT YET TRIED
-
-### N01 — Razer System BIOS Update (may re-provision dGPU VBIOS)
-- **Priority:** HIGH
-- **How:** Download Razer BIOS updater for RZ09-0409 from mysupport.razer.com. Run from Windows. Some BIOS updates include dGPU VBIOS and flash it during the update process.
-- **Why it might work:** On Optimus laptops, dGPU VBIOS is often embedded in system BIOS. Razer Blade 18 (2023) has separate "VBIOS Firmware Updater" packages. Badcaps thread on RZ09-0409 RTX 3080 reports fix via system BIOS reflash.
-- **Risk:** Low
-- **Resources:** mysupport.razer.com/app/answers/detail/a_id/5589/, VBiosFinder (github.com/coderobe/VBiosFinder) to extract dGPU VBIOS from BIOS updater
-- **Status:** NOT TRIED
-- **Result:**
 
 ### N02 — nvflash on Windows
 - **Priority:** HIGH

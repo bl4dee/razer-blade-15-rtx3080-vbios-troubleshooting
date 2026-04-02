@@ -203,6 +203,20 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** FAILED — **Every falcon register is completely write-locked.** All reads work but ALL writes are rejected (readback unchanged). FWSEC hardware gate blocks host writes to falcon IMEM/DMEM/control registers until VBIOS is verified from SPI. SEC2 DMEMD returns `0xDEAD5EC2` ("DEAD SEC2") confirming locked state.
 - **Times tried:** 3 (PMU, GSP, SEC2 — each with IMEM, DMEM, CPUCTL, DMA tested)
 
+### T31 — CH341A Hardware SPI Flash (Session 5)
+- **When:** 2026-04-02, Session 5
+- **How:** CH341A USB programmer + 1.8V adapter + SOP8 clip on Winbond W25Q16JWN (confirmed by chip markings: "25Q16JWN", date code 2105, blue dot pin 1). Laptop battery disconnected, AC unplugged, vapor chamber removed. Flash computer: Ryzen 9 NixOS desktop, flashrom v1.7.0.
+- **Result:** FAILED — 1.8V adapter suspected defective. Every clip connection through the adapter crashes the CH341A (LED green→red, `LIBUSB_TRANSFER_TIMED_OUT`, USB host controller crash). Without adapter, clip connection does NOT crash CH341A. CH341A works fine standalone (detected as `1a86:5512`).
+- **Observations:**
+  - Baseline test (no clip): "No EEPROM/flash device found" — correct/expected
+  - With clip + adapter on chip: `LIBUSB_TRANSFER_TIMED_OUT` and `LIBUSB_TRANSFER_STALL` on all SPI transactions
+  - Desktop rear xHCI controller crashed (`HC died`) during first attempt — required port migration to front USB
+  - Progressive USB subsystem degradation throughout session (rear ports dead, front ports dropping devices)
+  - CH341A stays green when clipped to chip WITHOUT adapter — confirms adapter is the failure point
+- **Times tried:** 5 (various clip orientations, with/without adapter, forced chip detection)
+- **Blocker:** 1.8V adapter defective or damaged. Need replacement.
+- **Log:** `TROUBLESHOOTING_LOG.md` Session 5
+
 ---
 
 ## RULED OUT (researched, not attempted)
@@ -262,18 +276,13 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Risk:** Low — worst case same EEPROM not found error
 - **See:** WINDOWS_NVFLASH_PROCEDURE.md for step-by-step
 
-### N15 — CH341A Hardware SPI Programmer ⬅ **THE FIX — ORDER NOW**
+### N15 — CH341A Hardware SPI Programmer ⬅ **IN PROGRESS**
 - **Priority:** CRITICAL — this is the ONLY remaining viable method
+- **Status:** Hardware acquired. Chip located and identified. **1.8V adapter suspected defective** — causes CH341A USB crash on every clip connection. See T31.
 - **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN.
 - **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip via external programmer. ~95% success rate. This is how every NVIDIA VBIOS recovery on Ampere is done.
 - **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY**.
-- **What to buy:**
-  - CH341A USB programmer: ~$8–12
-  - 1.8V adapter board (search "CH341A 1.8V adapter"): ~$5–8
-  - SOIC8/SOP8 test clip with ribbon cable: ~$5–8
-  - Total: ~$20–28 Amazon / ~$15 AliExpress
-- **Alternative:** Raspberry Pi + TXS0108E level shifter (~$3 if you have a Pi)
-- **Pre-flash check:** Use a multimeter on pin 8 (VCC) of the W25Q16JWN while laptop is powered. Expected: 1.8V (±0.15V). If 0V or 3.3V, you have a power rail problem, not just data corruption.
+- **Blocker:** Need replacement 1.8V adapter or alternative approach (Raspberry Pi + TXS0108E level shifter)
 - **See:** ch341a_flash.sh for exact flashrom commands
 
 ---
@@ -301,4 +310,4 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
 | Falcon register write-lock | PMU/GSP/SEC2 IMEM/DMEM/CPUCTL all reject writes — FWSEC hardware gate |
 | SEC2 DMEMD marker | `0xDEAD5EC2` ("DEAD SEC2") — NVIDIA locked-state debug value |
-| Total methods tried | 30 (T01–T30 across 4 sessions) + 11 researched/ruled out (N03–N23) |
+| Total methods tried | 31 (T01–T31 across 5 sessions) + 11 researched/ruled out (N03–N23) |

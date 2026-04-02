@@ -361,3 +361,93 @@ The GSP falcon IS loadable from the host filesystem (confirmed: RM version 570.1
 ### Final Session 4 Summary
 
 31 methods tested in total (T01–T30). Every conceivable software path has been explored and definitively blocked by FWSEC hardware write-locks on all falcon IMEM/DMEM/control registers. The CH341A hardware SPI programmer is the only remaining option.
+
+---
+
+## Session 5 — 2026-04-02 (NixOS Desktop, CH341A Hardware Flash Attempt)
+
+### Equipment
+- **Flash computer:** Ryzen 9 NixOS desktop
+- **Programmer:** CH341A USB SPI programmer (idVendor=1a86, idProduct=5512)
+- **Adapter:** 1.8V voltage adapter board
+- **Clip:** SOP8 test clip
+- **Software:** flashrom v1.7.0 via `nix-shell -p flashrom`
+- **Kit reference:** Akali27 Medium article CH341A kit (Figure 1 setup)
+
+### Setup & Software Verification
+
+1. **flashrom installed and working** — `nix-shell -p flashrom` provides flashrom v1.7.0
+2. **CH341A detected by Linux** — `dmesg` shows `idVendor=1a86, idProduct=5512, Product: USB UART-LPT`
+3. **Baseline test (no clip):** `sudo flashrom -p ch341a_spi` → "No EEPROM/flash device found" — **expected and correct**
+4. **VBIOS file verified:** `md5sum Razer.RTX3080.8192.210603.rom` → `f458d34324bfd843bee5107006a0e70f` ✓
+5. **Padded VBIOS prepared:** 976KB ROM padded with 0xFF to 2,097,152 bytes (2MB) → `padded_vbios.bin`
+6. **NOPASSWD sudo configured** for automated command execution
+
+### Laptop Disassembly
+
+1. Razer Blade 15 back panel removed (T5 Torx)
+2. Battery ribbon cable disconnected from motherboard
+3. AC power unplugged
+4. Vapor chamber/heatsink removed (11 Phillips screws, crisscross pattern)
+5. **VBIOS chip located:** Winbond 25Q16JWN, date code 2105, ~1-2cm below GPU die
+6. **Pin 1 identified:** Blue dot on top-right corner of chip
+
+### Attempt 1: CH341A + 1.8V Adapter + SOP8 Clip on W25Q16JWN
+
+- **Command:** `sudo flashrom -p ch341a_spi`
+- **Result:** FAILED — `LIBUSB_TRANSFER_TIMED_OUT`, `config_stream: Failed to write 3 bytes`, `Could not configure stream interface`
+- **Observation:** CH341A LED changed from green to red upon clipping. Desktop rear USB xHCI host controller crashed (`xhci_hcd 0000:07:00.1: HC died; cleaning up`). Keyboard on rear USB stopped working. Had to move devices to front USB.
+
+### Attempt 2: Reseated Clip, Different USB Port (Front)
+
+- **Command:** `sudo flashrom -p ch341a_spi`
+- **Result:** FAILED — "No EEPROM/flash device found" (clip not making good contact)
+
+### Attempt 3: Forced Chip Detection
+
+- **Command:** `sudo flashrom -p ch341a_spi -c W25Q16.W`
+- **Result:** FAILED — "No EEPROM/flash device found" (same clip contact issue)
+
+### Attempt 4: Reseated Clip Again
+
+- **Command:** `sudo flashrom -p ch341a_spi`
+- **Result:** FAILED — Massive `LIBUSB_TRANSFER_TIMED_OUT` spam followed by `LIBUSB_TRANSFER_STALL`. flashrom attempted ~30+ SPI transactions, all timed out. CH341A LED went red again.
+- **Partial output:**
+  ```
+  cb_in: error: LIBUSB_TRANSFER_TIMED_OUT
+  ch341a_spi_spi_send_command: Failed to read 4 bytes
+  cb_out: error: LIBUSB_TRANSFER_TIMED_OUT
+  ch341a_spi_spi_send_command: Failed to write 37 bytes
+  [... ~30 more timeout/stall errors ...]
+  ```
+- **Analysis:** This is different from "no chip found" — the programmer IS trying to communicate but every SPI transaction fails. The chip is electrically present but communication is broken.
+
+### Attempt 5: Without 1.8V Adapter (Diagnostic Only)
+
+- **Test:** Clipped SOP8 directly to CH341A (no 1.8V adapter) to isolate the problem
+- **Result:** CH341A stayed green with clip on chip — no crash
+- **Command:** `sudo flashrom -p ch341a_spi` → `Couldn't open device 1a86:5512` (CH341A had disconnected from USB by this point)
+- **Analysis:** The 1.8V adapter is the failure point. Without it, the CH341A doesn't crash when clipped to the chip. With it, every connection causes USB timeouts and CH341A LED goes red.
+
+### USB Controller Degradation
+
+Throughout the session, the desktop's USB subsystem progressively degraded:
+- Rear xHCI controller crashed (`HC died`) — rear USB ports stopped working
+- CH341A repeatedly caused USB timeouts, requiring replug cycles
+- Front USB ports eventually started dropping devices (webcam stopped)
+- **Root cause:** The repeated CH341A crashes/shorts corrupted the USB host controller state
+- **Fix:** Desktop reboot required to reset all USB controllers
+
+### Session 5 Summary
+
+**The 1.8V adapter is suspected defective or damaged.** Evidence:
+1. CH341A works fine without adapter (green LED, detected by Linux, no crash)
+2. CH341A works fine with adapter when NOT clipped to any chip
+3. CH341A crashes (red LED, USB timeouts) every time the clip connects to the W25Q16JWN through the 1.8V adapter
+4. Without the adapter, clipping directly to chip does NOT crash the CH341A
+
+**Next steps:**
+- Reboot desktop to reset USB controllers
+- Test with a new/replacement 1.8V adapter
+- If adapter is confirmed bad, order replacement (~$5-8)
+- Alternative: Raspberry Pi + TXS0108E level shifter approach

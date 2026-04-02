@@ -1,0 +1,63 @@
+# CH341A Flash Attempt Log — 2026-04-02
+# Equipment: CH341A (1a86:5512) + 1.8V adapter + SOP8 clip
+# Target: Winbond W25Q16JWN (25Q16JWN, date 2105, blue dot pin 1)
+# Software: flashrom v1.7.0, NixOS Linux 6.18.18
+# Flash computer: Ryzen 9 desktop, front USB-A port
+
+## USB Detection (CH341A standalone, no clip)
+$ sudo dmesg | tail -20
+[286020.357464] usb 1-2.3.4: new full-speed USB device number 13 using xhci_hcd
+[286020.445950] usb 1-2.3.4: New USB device found, idVendor=1a86, idProduct=5512, bcdDevice= 3.04
+[286020.445955] usb 1-2.3.4: New USB device strings: Mfr=0, Product=2, SerialNumber=0
+[286020.445957] usb 1-2.3.4: Product: USB UART-LPT
+
+## Baseline Test (no clip attached)
+$ sudo flashrom -p ch341a_spi
+flashrom v1.7.0 on Linux 6.18.18 (x86_64)
+flashrom is free software, get the source code at https://flashrom.org
+No EEPROM/flash device found.
+# EXPECTED — confirms programmer works
+
+## Attempt 1: Clip on chip with 1.8V adapter (rear USB)
+$ sudo flashrom -p ch341a_spi
+cb_out: error: LIBUSB_TRANSFER_TIMED_OUT
+config_stream: Failed to write 3 bytes
+Could not configure stream interface.
+Error: Programmer initialization failed.
+# CH341A LED: green → red
+# Side effect: rear xHCI controller crashed
+
+## dmesg after crash
+[307101.534249] xhci_hcd 0000:07:00.1: HC died; cleaning up
+[307101.534293] spi-ch341 1-2.3.4:1.0: probe with driver spi-ch341 failed with error -110
+
+## Attempt 2: Reseated clip, front USB port
+$ sudo flashrom -p ch341a_spi
+No EEPROM/flash device found.
+# Clip not making contact
+
+## Attempt 3: Forced chip detection
+$ sudo flashrom -p ch341a_spi -c W25Q16.W
+No EEPROM/flash device found.
+# Still no contact
+
+## Attempt 4: Reseated clip firmly
+$ sudo flashrom -p ch341a_spi
+cb_in: error: LIBUSB_TRANSFER_TIMED_OUT
+ch341a_spi_spi_send_command: Failed to read 4 bytes
+cb_out: error: LIBUSB_TRANSFER_TIMED_OUT
+ch341a_spi_spi_send_command: Failed to write 37 bytes
+[... ~30 more timeout errors, transitioning to LIBUSB_TRANSFER_STALL ...]
+# Programmer IS trying to talk SPI but every transaction fails
+# CH341A LED: red
+
+## Attempt 5: Without 1.8V adapter (diagnostic)
+# Clipped SOP8 directly CH341A → chip (no adapter)
+# CH341A LED: stayed GREEN — no crash
+# Confirms: 1.8V adapter is the failure point
+
+## USB controller degradation timeline
+1. Rear xHCI crashed (HC died) — rear ports dead
+2. CH341A repeatedly crashed on front USB, recovered after replug
+3. Front USB started dropping devices (webcam)
+4. Session ended — desktop reboot required to reset USB controllers

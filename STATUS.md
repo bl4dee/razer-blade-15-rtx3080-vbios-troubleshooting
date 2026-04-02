@@ -203,19 +203,20 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** FAILED — **Every falcon register is completely write-locked.** All reads work but ALL writes are rejected (readback unchanged). FWSEC hardware gate blocks host writes to falcon IMEM/DMEM/control registers until VBIOS is verified from SPI. SEC2 DMEMD returns `0xDEAD5EC2` ("DEAD SEC2") confirming locked state.
 - **Times tried:** 3 (PMU, GSP, SEC2 — each with IMEM, DMEM, CPUCTL, DMA tested)
 
-### T31 — CH341A Hardware SPI Flash (Session 5)
-- **When:** 2026-04-02, Session 5
-- **How:** CH341A USB programmer + 1.8V adapter + SOP8 clip on Winbond W25Q16JWN (confirmed by chip markings: "25Q16JWN", date code 2105, blue dot pin 1). Laptop battery disconnected, AC unplugged, vapor chamber removed. Flash computer: Ryzen 9 NixOS desktop, flashrom v1.7.0.
-- **Result:** FAILED — 1.8V adapter suspected defective. Every clip connection through the adapter crashes the CH341A (LED green→red, `LIBUSB_TRANSFER_TIMED_OUT`, USB host controller crash). Without adapter, clip connection does NOT crash CH341A. CH341A works fine standalone (detected as `1a86:5512`).
+### T31 — CH341A Hardware SPI Flash (Sessions 5 & 6)
+- **When:** 2026-04-02, Sessions 5 & 6
+- **How:** CH341A USB programmer + 1.8V adapter + SOP8 clip on Winbond W25Q16JWN (confirmed by chip markings: "25Q16JWN", date code 2105, blue dot pin 1). Laptop battery disconnected, AC unplugged, vapor chamber removed. Flash computer: Ryzen 9 NixOS desktop, flashrom v1.7.0. Also tested with IMSProg GUI.
+- **Result:** FAILED — Session 5: USB crashes with 1.8V adapter in chain. Session 6 (post-reboot): no USB crash, but chip returns all zeros (id1 0x00, id2 0x00) — SPI bus unresponsive. Direct 3.3V test causes immediate USB crash, **proving clip makes electrical contact** and chip draws current. 1.8V adapter is NOT defective (revised from Session 5 hypothesis) — it correctly prevents overcurrent but chip still won't respond to SPI commands.
 - **Observations:**
   - Baseline test (no clip): "No EEPROM/flash device found" — correct/expected
-  - With clip + adapter on chip: `LIBUSB_TRANSFER_TIMED_OUT` and `LIBUSB_TRANSFER_STALL` on all SPI transactions
-  - Desktop rear xHCI controller crashed (`HC died`) during first attempt — required port migration to front USB
-  - Progressive USB subsystem degradation throughout session (rear ports dead, front ports dropping devices)
-  - CH341A stays green when clipped to chip WITHOUT adapter — confirms adapter is the failure point
-- **Times tried:** 5 (various clip orientations, with/without adapter, forced chip detection)
-- **Blocker:** 1.8V adapter defective or damaged. Need replacement.
-- **Log:** `TROUBLESHOOTING_LOG.md` Session 5
+  - Session 5: With clip + adapter on chip: `LIBUSB_TRANSFER_TIMED_OUT` and `LIBUSB_TRANSFER_STALL` on all SPI transactions; xHCI crash
+  - Session 6: With clip + adapter on chip: all zeros, no crash — adapter works but no SPI response
+  - Session 6: Direct 3.3V (no adapter) to chip: **immediate USB crash** — proves electrical contact; 1.8V chip latch-up at 3.3V draws excessive current
+  - 60-second continuous probe loop with wiggling: zero contact throughout
+  - All parts individually confirmed working: CH341A on USB, adapter prevents overcurrent, clip makes contact (proven), chip electrically present (proven)
+- **Times tried:** 5 (Session 5) + multiple (Session 6) — various configurations with/without adapter, continuous probe loop
+- **Blocker:** Suspected GPU SPI bus contention — GPU's SPI controller pins may be holding/clamping the SPI bus even when unpowered, preventing external programmer communication. May need to desolder chip or lift CS# pin to isolate from GPU.
+- **Log:** `TROUBLESHOOTING_LOG.md` Sessions 5 & 6
 
 ---
 
@@ -278,11 +279,11 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 
 ### N15 — CH341A Hardware SPI Programmer ⬅ **IN PROGRESS**
 - **Priority:** CRITICAL — this is the ONLY remaining viable method
-- **Status:** Hardware acquired. Chip located and identified. **1.8V adapter suspected defective** — causes CH341A USB crash on every clip connection. See T31.
+- **Status:** Hardware acquired. Chip located and identified. 1.8V adapter confirmed working (revised from Session 5). **SPI bus contention from GPU suspected** — GPU's SPI controller pins may hold/clamp the bus even when unpowered, blocking external programmer communication. Clip makes electrical contact (proven by 3.3V crash test), but chip does not respond to SPI commands through the adapter. See T31.
 - **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN.
 - **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip via external programmer. ~95% success rate. This is how every NVIDIA VBIOS recovery on Ampere is done.
 - **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY**.
-- **Blocker:** Need replacement 1.8V adapter or alternative approach (Raspberry Pi + TXS0108E level shifter)
+- **Blocker:** Suspected GPU SPI bus contention. Next steps: desolder chip for off-board flashing, lift CS# pin, or add bus isolation. Research whether other Ampere laptop recoveries encountered same issue.
 - **See:** ch341a_flash.sh for exact flashrom commands
 
 ---
@@ -310,4 +311,4 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
 | Falcon register write-lock | PMU/GSP/SEC2 IMEM/DMEM/CPUCTL all reject writes — FWSEC hardware gate |
 | SEC2 DMEMD marker | `0xDEAD5EC2` ("DEAD SEC2") — NVIDIA locked-state debug value |
-| Total methods tried | 31 (T01–T31 across 5 sessions) + 11 researched/ruled out (N03–N23) |
+| Total methods tried | 31 (T01–T31 across 6 sessions) + 11 researched/ruled out (N03–N23) |

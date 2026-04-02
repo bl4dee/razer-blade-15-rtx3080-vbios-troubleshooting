@@ -451,3 +451,68 @@ Throughout the session, the desktop's USB subsystem progressively degraded:
 - Test with a new/replacement 1.8V adapter
 - If adapter is confirmed bad, order replacement (~$5-8)
 - Alternative: Raspberry Pi + TXS0108E level shifter approach
+
+---
+
+## Session 6 — 2026-04-02 (NixOS Desktop, CH341A Hardware Flash Continued)
+
+### Pre-Session: USB Controller Recovery
+- Rebooted NixOS desktop to reset crashed USB controllers from Session 5
+- All USB ports fully functional after reboot
+- CH341A confirmed working: detected as `1a86:5512`, both red+green LEDs normal
+
+### Software Setup
+- Installed **IMSProg** GUI as alternative to flashrom CLI: `nix-shell -p imsprog`
+- Retained flashrom v1.7.0 from Session 5
+
+### Attempt 6: CH341A + 1.8V Adapter + Clip on Chip (Post-Reboot)
+
+- **Command:** `sudo flashrom -p ch341a_spi`
+- **Result:** FAILED — all zeros returned (chip id1 0x00, id2 0x00). SPI bus returning nothing.
+- **Analysis:** Adapter is in the chain, no USB crash this time, but chip does not respond to SPI commands at all.
+
+### Attempt 7: Direct 3.3V (No 1.8V Adapter) + Clip on Chip
+
+- **Test:** Removed 1.8V adapter from chain, connected SOP8 clip directly to CH341A output (3.3V native)
+- **Command:** `sudo flashrom -p ch341a_spi`
+- **Result:** FAILED — also all zeros (id1 0x00, id2 0x00). Same as with adapter.
+
+### Key Discovery 1: USB Crash Proves Electrical Contact
+
+- When clip was properly seated on chip and detected via flashrom, CH341A crashed with `LIBUSB_TRANSFER_TIMED_OUT` when 1.8V adapter was in the chain — same behavior as Session 5.
+- **Direct 3.3V to chip (no adapter) caused IMMEDIATE USB crash** — this **PROVES** the clip IS making electrical contact with the chip.
+- The 1.8V chip (W25Q16JWN, rated 1.65V–1.95V) latch-up at 3.3V draws too much current and crashes the CH341A's USB interface.
+
+### Key Discovery 2: 1.8V Adapter Behavior Explained
+
+- **With 1.8V adapter:** No USB crash but no chip response either. The adapter passes enough current/voltage to prevent the overcurrent condition, but the chip doesn't respond to SPI commands.
+- **Without 1.8V adapter (3.3V direct):** Immediate USB crash — confirms clip is making contact and chip is electrically connected.
+- **Conclusion:** The 1.8V adapter is NOT defective (revising Session 5 hypothesis). It correctly prevents overcurrent. The problem is that SPI communication doesn't work even when the electrical connection is established.
+
+### Attempt 8: 60-Second Continuous Probe Loop
+
+- Ran automated probe loop with 1.8V adapter in chain, wiggling clip throughout
+- **Result:** Zero chip contact detected across entire 60-second window
+- All reads returned zeros — no SPI response from chip at any clip position
+
+### New Hypothesis: GPU SPI Bus Contention
+
+- All individual parts confirmed working:
+  1. **CH341A** — detects on USB, communicates with flashrom, LEDs normal
+  2. **1.8V adapter** — doesn't crash USB, passes voltage correctly
+  3. **SOP8 clip** — makes physical contact with chip (proven by 3.3V crash test)
+  4. **W25Q16JWN chip** — electrically present (proven by current draw behavior)
+- **Hypothesis:** The GPU's SPI controller pins may be holding/clamping the SPI bus even when the laptop is unpowered. The SPI lines (MOSI, MISO, CLK, CS#) connect to both the flash chip and the GPU. Even with power removed, the GPU's I/O pads may have protection diodes or ESD structures that create a low-impedance path, sinking current from the external programmer and preventing valid SPI signaling.
+- **Possible fix:** Desolder the flash chip from the board to completely isolate it from the GPU, or lift the CS# (chip select) pin to break the GPU's hold on the bus while leaving the other pins connected.
+
+### Session 6 Summary
+
+**SPI bus contention from the GPU is the leading hypothesis.** The clip makes electrical contact (proven by 3.3V overcurrent crash), the 1.8V adapter works (prevents overcurrent), but the chip does not respond to SPI commands through the adapter. The GPU's SPI controller pins are likely holding the bus, preventing external programmer communication.
+
+**Times tried:** Multiple probe attempts with various configurations (with/without adapter, continuous 60s probe loop with wiggling)
+
+**Next steps:**
+- Option A: Desolder W25Q16JWN from board, flash on breakout board, resolder
+- Option B: Lift CS# pin to isolate from GPU, flash in-circuit
+- Option C: Add series resistors or bus isolation circuit between clip and chip
+- Research whether other Ampere laptop VBIOS recovery guides mention GPU bus contention issues

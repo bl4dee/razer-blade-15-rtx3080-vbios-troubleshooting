@@ -23,15 +23,25 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 .
 ├── README.md                    This file
 ├── STATUS.md                    Master tracking: every method tried/untried
-├── TROUBLESHOOTING_LOG.md       Detailed narrative log (4 sessions, 30+ methods)
+├── TROUBLESHOOTING_LOG.md       Detailed narrative log (7 sessions, 31+ methods)
+├── PLAN.md                      Attack plan
 ├── docs/
 │   ├── DIAGRAM.md               Visual diagrams of the problem and architecture
 │   ├── PLAN.md                  Original attack plan
 │   └── WINDOWS_NVFLASH_PROCEDURE.md
 ├── scripts/
+│   ├── ch341a_flash.sh          Interactive hardware SPI flash with safety checks
+│   ├── ch341a_write_noerase.py  No-erase page hammering (partially works!)
+│   ├── flash_vbios.py           Full erase + program + verify via pyusb
+│   ├── slow_flash.py            16-byte chunk writes for flaky connections
+│   ├── bitbang_write.py         GPIO bit-bang SPI attempt (didn't work)
+│   ├── clear_wp.py              Clear W25Q16JW write protection registers
+│   ├── sector_flash.sh          Sector-by-sector flashrom wrapper
 │   ├── diagnose.sh              GPU diagnostic (lspci, dmesg, dmidecode, sysfs)
 │   ├── flash.sh                 Automated software flash pipeline
-│   └── ch341a_flash.sh          Interactive hardware SPI flash with safety checks
+│   └── run_winpe.sh             Windows PE QEMU launcher
+├── pics/                        25 hardware photos — motherboard, chips, CH341A setup
+│   └── README.md                Photo gallery with descriptions (SEO-indexed)
 ├── patches/                     Nouveau kernel module patches (8 total)
 │   ├── README.md                Patch descriptions and test results
 │   ├── image.patch              Accept NVGI LE signature
@@ -39,10 +49,17 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 │   ├── base.patch               Skip preinit + non-fatal ctor/init/intr
 │   ├── gsp.patch                Survive FWSEC sb_ctor failure
 │   └── fwsec.patch              Survive all FWSEC init failures
-├── logs/                        Raw diagnostic output
-│   ├── gpu_diagnostic_*.log     Hardware diagnostic captures
-│   ├── flash_*.log              Flash attempt logs
-│   └── diagnostic_attempt.log   MODS/MATS diagnostic attempt
+├── logs/                        Raw diagnostic output + binary dumps
+│   ├── flashrom_session7_verbose.log  Full chip probe log (1744 lines)
+│   ├── baseline_before_tools.bin      2MB chip read before Session 7 writes
+│   ├── after_ch341tool.bin            2MB chip read after ch341prog writes
+│   ├── ch341a_session5_20260402.log   Session 5 USB crash logs
+│   ├── gpu_diagnostic_*.log           Hardware diagnostic captures
+│   └── flash_*.log                    Flash attempt logs
+├── win_tools/                   AsProgrammer + CH341/CH347 drivers for Windows
+├── backup_corrupted.bin         Corrupted VBIOS read from chip (99.8% match to good)
+├── padded_vbios.bin             Target VBIOS padded to 2MB chip size
+├── layout.txt                   SPI chip memory layout (vbios/bad_sector/padding)
 ├── nvflash                      NVIDIA flash tool binary (v5.867.0)
 └── Razer.RTX3080.8192.210603.rom  Target VBIOS image (976KB)
 ```
@@ -71,6 +88,11 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 8. **VBIOS file format** starts with `NVGI` (NVIDIA container), not `55 AA` — first PCI ROM sub-image at offset 0x9400
 9. **FWSEC hardware security** on the GPU die cryptographically verifies VBIOS from SPI before unlocking ANY falcon — this is the definitive reason all 30 software methods fail
 10. **Falcon IMEM/DMEM direct write** (hexkyz technique) — PMU, GSP, SEC2 falcon registers are readable via BAR0 but ALL writes are hardware-locked by FWSEC
+11. **CH341A writes partially land** (Session 7) — chip detected, reads/erases work, but writes only succeed at 0.18%/pass due to data line voltage mismatch (1.8V adapter only drops VCC, not MOSI/CLK/CS)
+
+## Photos
+
+See **[pics/](pics/)** for 25 detailed hardware photos of the motherboard, GPU VBIOS flash chip, CH341A setup, and all SOP8 chips identified on the board. Useful for anyone trying to locate the W25Q16JWN on a Razer Blade 15 2021.
 
 ## Root Cause: FWSEC Hardware Security
 
@@ -225,10 +247,13 @@ MATS identifies which specific GDDR6 chip is faulty by memory subpartition. If a
 
 If you're an AI helping debug this issue, read `STATUS.md` first. It has the full state of what's been tried and what hasn't. Key context:
 
-- 30+ software methods tried across 4 sessions — ALL failed due to FWSEC hardware verification
+- 31+ methods tried across 7 sessions — ALL software methods failed due to FWSEC hardware verification
 - The VBIOS chip is a standard Winbond 25-series 1.8V SPI NOR flash
 - The GPU silicon is alive (responds to MMIO reads) but the falcon microcontroller is halted
 - FWSEC (hardware security block on GPU die) blocks ALL software paths — this is definitively proven
-- **Hardware SPI programmer (CH341A + 1.8V adapter) is the ONLY viable fix**
+- **Hardware SPI programmer is the ONLY viable fix** — CH341A partially works but needs proper 1.8V level shifting
+- Session 7 proved writes land correctly but at 0.18%/pass — the 1.8V adapter only drops VCC, not data lines
+- The chip currently has 45.5% of the target bytes accumulated via no-erase hammering — DO NOT ERASE
+- Need TXS0108E level shifter ($3) or CH347T programmer ($15) to fix the data line voltage
 - See `docs/DIAGRAM.md` for comprehensive visual explanation of the architecture
 

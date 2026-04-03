@@ -40,8 +40,9 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 │   ├── diagnose.sh              GPU diagnostic (lspci, dmesg, dmidecode, sysfs)
 │   ├── flash.sh                 Automated software flash pipeline
 │   └── run_winpe.sh             Windows PE QEMU launcher
-├── pics/                        25 hardware photos — motherboard, chips, CH341A setup
-│   └── README.md                Photo gallery with descriptions (SEO-indexed)
+├── photos/                      Hardware photos — motherboard, chips, CH341A setup
+│   ├── README.md                Photo gallery with descriptions (SEO-indexed)
+│   └── teardown/                General teardown reference (CPU, VRM, ports, etc.)
 ├── patches/                     Nouveau kernel module patches (8 total)
 │   ├── README.md                Patch descriptions and test results
 │   ├── image.patch              Accept NVGI LE signature
@@ -92,7 +93,7 @@ See **[STATUS.md](STATUS.md)** for a structured list of:
 
 ## Photos
 
-See **[pics/](pics/)** for 25 detailed hardware photos of the motherboard, GPU VBIOS flash chip, CH341A setup, and all SOP8 chips identified on the board. Useful for anyone trying to locate the W25Q16JWN on a Razer Blade 15 2021.
+See **[photos/](photos/)** for detailed hardware photos of the motherboard, GPU VBIOS flash chip, CH341A setup, and all SOP8 chips identified on the board. Useful for anyone trying to locate the W25Q16JWN on a Razer Blade 15 2021.
 
 ## Root Cause: FWSEC Hardware Security
 

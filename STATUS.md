@@ -203,20 +203,25 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Result:** FAILED — **Every falcon register is completely write-locked.** All reads work but ALL writes are rejected (readback unchanged). FWSEC hardware gate blocks host writes to falcon IMEM/DMEM/control registers until VBIOS is verified from SPI. SEC2 DMEMD returns `0xDEAD5EC2` ("DEAD SEC2") confirming locked state.
 - **Times tried:** 3 (PMU, GSP, SEC2 — each with IMEM, DMEM, CPUCTL, DMA tested)
 
-### T31 — CH341A Hardware SPI Flash (Sessions 5 & 6)
-- **When:** 2026-04-02, Sessions 5 & 6
-- **How:** CH341A USB programmer + 1.8V adapter + SOP8 clip on Winbond W25Q16JWN (confirmed by chip markings: "25Q16JWN", date code 2105, blue dot pin 1). Laptop battery disconnected, AC unplugged, vapor chamber removed. Flash computer: Ryzen 9 NixOS desktop, flashrom v1.7.0. Also tested with IMSProg GUI.
-- **Result:** FAILED — Session 5: USB crashes with 1.8V adapter in chain. Session 6 (post-reboot): no USB crash, but chip returns all zeros (id1 0x00, id2 0x00) — SPI bus unresponsive. Direct 3.3V test causes immediate USB crash, **proving clip makes electrical contact** and chip draws current. 1.8V adapter is NOT defective (revised from Session 5 hypothesis) — it correctly prevents overcurrent but chip still won't respond to SPI commands.
-- **Observations:**
-  - Baseline test (no clip): "No EEPROM/flash device found" — correct/expected
-  - Session 5: With clip + adapter on chip: `LIBUSB_TRANSFER_TIMED_OUT` and `LIBUSB_TRANSFER_STALL` on all SPI transactions; xHCI crash
-  - Session 6: With clip + adapter on chip: all zeros, no crash — adapter works but no SPI response
-  - Session 6: Direct 3.3V (no adapter) to chip: **immediate USB crash** — proves electrical contact; 1.8V chip latch-up at 3.3V draws excessive current
-  - 60-second continuous probe loop with wiggling: zero contact throughout
-  - All parts individually confirmed working: CH341A on USB, adapter prevents overcurrent, clip makes contact (proven), chip electrically present (proven)
-- **Times tried:** 5 (Session 5) + multiple (Session 6) — various configurations with/without adapter, continuous probe loop
-- **Blocker:** Suspected GPU SPI bus contention — GPU's SPI controller pins may be holding/clamping the SPI bus even when unpowered, preventing external programmer communication. May need to desolder chip or lift CS# pin to isolate from GPU.
-- **Log:** `TROUBLESHOOTING_LOG.md` Sessions 5 & 6
+### T31 — CH341A Hardware SPI Flash (Sessions 5, 6 & 7)
+- **When:** 2026-04-02 to 2026-04-03, Sessions 5, 6 & 7
+- **How:** CH341A USB programmer + 1.8V adapter + SOP8 clip on Winbond W25Q16JWN (confirmed by chip markings: "25Q16JWN", date code 2105, blue dot pin 1). Laptop battery disconnected, AC unplugged, vapor chamber removed. Flash computer: Ryzen 9 NixOS desktop. Tools: flashrom v1.7.0 (stock + patched), ch341prog, IMSProg, custom Python pyusb scripts.
+- **Result:** PARTIAL SUCCESS
+  - Sessions 5–6: No SPI response (USB crashes, all-zeros reads). Proved clip makes electrical contact via 3.3V overcurrent crash test.
+  - **Session 7: BREAKTHROUGH** — chip detected (RDID 0xEF6015), reads/erases work perfectly. Writes partially land at **0.18% per-byte per pass**. After ~25 no-erase write passes: **45.5% overall byte match, zero overcorrect bits.**
+- **Tools tried in Session 7:**
+  - flashrom stock v1.7.0: erase works, writes don't land
+  - flashrom patched (need_erase=0, skip-read, page_size=4): 0.18%/pass
+  - ch341prog: same 0.18%/pass (confirms hardware issue)
+  - IMSProg: fails verification
+  - Custom Python no-erase script (`ch341a_write_noerase.py`): 0.18%/pass, bits accumulate correctly
+  - Custom Python GPIO bit-bang (`bitbang_write.py`): protocol too complex, abandoned
+- **Root cause:** The 1.8V adapter (AMS1117) only drops VCC to 1.8V. Data lines (MOSI/CLK/CS) pass through at CH341A native 3.3–5V. The W25Q16JWN (1.8V I/O) can't reliably latch 3.3V signals. Erase works (single-opcode, chip autonomous). Page Program fails (256-byte MOSI stream at wrong voltage). Three independent tools produce identical 0.18% → hardware-determined.
+- **Current chip state:** 45.5% byte match, zero overcorrect bits, first 2 bytes correct (0x4E56 = "NV"), bad sector at 0x111000 still present. Safe to continue writing without erase.
+- **backup_corrupted.bin:** Confirmed as valid prior read — 99.8% match to target VBIOS. The corruption is minimal (enough to fail FWSEC signature, not enough to destroy the image).
+- **Times tried:** Sessions 5 (USB crashes), 6 (all-zeros), 7 (partial writes × 25+ passes with 3 different tools)
+- **Blocker:** Data line voltage mismatch. Need TXS0108E level shifter ($3) or CH347T programmer ($15).
+- **Logs:** `TROUBLESHOOTING_LOG.md` Sessions 5–7, `logs/flashrom_session7_verbose.log`, `logs/baseline_before_tools.bin`, `logs/after_ch341tool.bin`
 
 ---
 
@@ -277,14 +282,15 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Risk:** Low — worst case same EEPROM not found error
 - **See:** WINDOWS_NVFLASH_PROCEDURE.md for step-by-step
 
-### N15 — CH341A Hardware SPI Programmer ⬅ **IN PROGRESS**
+### N15 — CH341A Hardware SPI Programmer ⬅ **IN PROGRESS (PARTIALLY WORKING)**
 - **Priority:** CRITICAL — this is the ONLY remaining viable method
-- **Status:** Hardware acquired. Chip located and identified. 1.8V adapter confirmed working (revised from Session 5). **SPI bus contention from GPU suspected** — GPU's SPI controller pins may hold/clamp the bus even when unpowered, blocking external programmer communication. Clip makes electrical contact (proven by 3.3V crash test), but chip does not respond to SPI commands through the adapter. See T31.
-- **How:** CH341A programmer + 1.8V adapter + SOP8 test clip → direct SPI flash of W25Q16JWN.
-- **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip via external programmer. ~95% success rate. This is how every NVIDIA VBIOS recovery on Ampere is done.
-- **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY**.
-- **Blocker:** Suspected GPU SPI bus contention. Next steps: desolder chip for off-board flashing, lift CS# pin, or add bus isolation. Research whether other Ampere laptop recoveries encountered same issue.
-- **See:** ch341a_flash.sh for exact flashrom commands
+- **Status:** **Chip responds, reads/erases work, writes partially land (0.18%/pass).** Session 7 broke through the Session 5–6 detection failures. SPI bus contention hypothesis was WRONG — the real issue is data line voltage mismatch from the adapter. 45.5% of target bytes accumulated correctly via no-erase hammering.
+- **How:** CH341A programmer + **proper 1.8V level shifting** + SOP8 test clip → direct SPI flash of W25Q16JWN.
+- **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip. The approach is proven correct (bits land in the right direction, zero overcorrect bits).
+- **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY** but current adapter only drops VCC, not data lines.
+- **Blocker:** Data line voltage mismatch — need TXS0108E level shifter ($3) or CH347T programmer ($15) for proper 1.8V data line driving.
+- **⚠️ DO NOT ERASE THE CHIP** — 45.5% accumulated correct bits would be lost.
+- **See:** `scripts/ch341a_write_noerase.py`, `scripts/flash_vbios.py`, T31
 
 ---
 
@@ -311,4 +317,12 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
 | Falcon register write-lock | PMU/GSP/SEC2 IMEM/DMEM/CPUCTL all reject writes — FWSEC hardware gate |
 | SEC2 DMEMD marker | `0xDEAD5EC2` ("DEAD SEC2") — NVIDIA locked-state debug value |
-| Total methods tried | 31 (T01–T31 across 6 sessions) + 11 researched/ruled out (N03–N23) |
+| CH341A chip detection | RDID 0xEF6015 = Winbond W25Q16JW (Session 7) |
+| CH341A read quality | Works but noisy — 133 bytes differ between consecutive reads |
+| CH341A erase | Works perfectly — chip goes to all 0xFF reliably |
+| CH341A write success rate | 0.18% per-byte per pass (identical across flashrom, ch341prog, Python) |
+| CH341A overcorrect bits | 0 (zero) — every bit that lands is correct |
+| Chip state after 25 passes | 45.5% overall byte match, 3.8% actual data bytes correct |
+| backup_corrupted.bin | 99.8% match to target VBIOS — corruption is minimal |
+| 1.8V adapter | AMS1117: drops VCC only, data lines pass through at 3.3–5V |
+| Total methods tried | 31 (T01–T31 across 7 sessions) + 11 researched/ruled out (N03–N23) |

@@ -669,3 +669,198 @@ Shows every RDID probe across 500+ chip models — all return `0xEF6015` confirm
 2. **CH347T programmer** (~$15) — native configurable SPI voltage and speed. Drop-in replacement for CH341A.
 3. **AsProgrammer on Windows VM** — Tiny10 23H2 ISO downloading. Last-resort software attempt.
 4. **DO NOT ERASE the chip** — the 45.5% accumulated correct bits would be lost. Any future write strategy should build on what's already there.
+
+---
+
+## Session 8 — 2026-04-04 (NixOS Desktop, CH341A V1.7 "1.8V Level Conversion" + Windows 10)
+
+### Equipment Changes
+- **New programmer:** CH341A V1.7 with built-in "1.8V Level Conversion" (Amazon B0D9XQ4YBV)
+  - Standard CH341A with integrated AMS1117-1.8 voltage regulator
+  - Blue ZIF socket + SOP8 pin header
+  - USB 2.0 extender, back I/O on PC
+- **Windows 10:** Installed Tiny10, tried AsProgrammer and NeoProgrammer
+- **Chip confirmed:** Winbond W25Q16JWNIQ (not "JWN1Q" — the "I" is the letter I for Industrial temp range, not the number 1)
+
+### Chip Part Number Clarification
+- Full part number: **W25Q16JWNIQ**
+  - W25Q16 = 16Mbit Quad SPI
+  - JW = 1.8V series (J-generation)
+  - N = SOIC-8 narrow body package
+  - I = Industrial temperature range (-40 to +85°C)
+  - Q = Lead-free/RoHS
+- DigiKey lists W25Q16JW**S**NIQ (S = SOIC-8 wide body) — different package, same silicon
+- **JEDEC ID: EF 60 15** — identical to W25Q16FW_1.8V in AsProgrammer's chip database
+- Datasheet: Winbond W25Q16JW RevD (Mouser: W25Q16JW_RevD_01152020_Plus-1760324.pdf)
+
+### Windows 10 Results (AsProgrammer & NeoProgrammer)
+- **CH341A detected:** Both programs found the CH341A USB device
+- **Chip not in database:** W25Q16JWNIQ not listed in either program's chip list
+  - AsProgrammer has W25Q16FW_1.8V (ID: EF6015) — same JEDEC ID, compatible
+  - Selected W25Q16FW_1.8V manually
+- **Same behavior as Linux:** Chip detected, erase works, reads work, **writes don't land**
+- **Conclusion:** Issue is hardware (CH341A), not OS or software
+
+### Read Quality Improvement
+| Metric | Session 7 (old CH341A + adapter) | Session 8 (CH341A V1.7) |
+|---|---|---|
+| Read noise between consecutive reads | 133 bytes | **2 bytes** |
+| Chip detection | Intermittent | Reliable |
+| USB crashes | Frequent | None |
+
+The new CH341A V1.7 has significantly better read signal integrity.
+
+### Chip Protection Analysis (Definitive)
+Read all three status registers via custom Python pyusb script with flashrom-compatible CH341A init:
+
+| Register | Value | Meaning |
+|---|---|---|
+| SR1 | 0x00 | No block protection (BP0-2=0, SEC=0, TB=0, SRP0=0) |
+| SR2 | 0x02 | QE=1 (Quad Enable), all else zero (CMP=0, SRP1=0, LB1-3=0) |
+| SR3 | 0x00 | WPS=0 (legacy block protect mode, NOT individual block lock) |
+
+- **No write protection active.** All protection mechanisms confirmed cleared.
+- QE=1 is the only non-default bit (enables Quad SPI mode, harmless for standard SPI)
+- Updated `clear_wp.py` to handle WPS/SR3 and Global Block Unlock (0x98), but they weren't needed
+- Block lock readback at all addresses = 0 (unlocked)
+- /WP pin irrelevant (SRP0=SRP1=0 = software protection only)
+
+### Root Cause Discovery: CH341A SPI MOSI Buffer Limitation
+
+**THE REAL PROBLEM WAS NEVER THE VOLTAGE.** Through systematic testing, discovered that the CH341A's SPI engine has a hardware limitation on MOSI data transmission.
+
+#### Evidence Chain
+
+**Test 1: Write size sweep**
+Wrote different amounts of data via Page Program, all to freshly erased sectors:
+
+| Data Size | SPI Bytes (cmd+addr+data) | Bytes Landed | Result |
+|---|---|---|---|
+| 1 byte | 5 | 1 | OK (chunked mode) |
+| 2 bytes | 6 | 2 | OK |
+| 4 bytes | 8 | 2 | First 2 data bytes only |
+| 8 bytes | 12 | 2 | First 2 data bytes only |
+| 16 bytes | 20 | 2 | First 2 data bytes only |
+| 32 bytes | 36 | 2 | First 2 data bytes only |
+| 256 bytes | 260 | 2 | First 2 data bytes only |
+
+**Exactly 2 data bytes land per Page Program, regardless of total size sent.**
+
+**Test 2: Multiple writes to same sector (one erase)**
+- 1st PP at page offset +0: ACCEPTED (SR1 BUSY=1 after PP) → 2 bytes landed
+- 2nd PP at page offset +2: REJECTED (SR1 BUSY=0, WEL=0 after PP) → nothing
+- 3rd PP at page offset +4: REJECTED
+- Conclusion: **Chip only accepts ONE Page Program per 256-byte page per erase cycle**
+
+**Test 3: Multiple writes to DIFFERENT sectors (each freshly erased)**
+- ALL writes succeed at 100%: 8/8 different 2-byte values, all correct
+- **Writes work perfectly when the data gets through**
+
+**Test 4: Per-page vs per-sector limit**
+- Write to page 0 (addr+0x000): ACCEPTED (BUSY=1)
+- Write to page 1 (addr+0x100): ACCEPTED (BUSY=1) ← different page, same sector
+- Write to page 0 offset +2: REJECTED (BUSY=0) ← same page as first write
+- **Limit is per-page, not per-sector.** 16 pages per sector each get one PP.
+
+**Test 5: Page corruption check**
+- After writing 2 bytes at page offset 0, read full 64-byte range
+- **0 non-FF bytes beyond the 2 written** — page is NOT corrupted
+- The chip simply rejects additional PPs to an already-programmed page
+
+**Test 6: SR1 between operations**
+```
+After erase:  SR1=0x00 (ready)
+After WREN:   SR1=0x02 (WEL=1) ← Write Enable set correctly
+After 1st PP: SR1=0x03 (BUSY=1, WEL=1) ← Chip ACCEPTED, programming
+After wait:   SR1=0x00 (done)
+After WREN:   SR1=0x02 (WEL=1) ← Write Enable set correctly again
+After 2nd PP: SR1=0x00 (BUSY=0, WEL=0) ← Chip REJECTED, not programming
+```
+The chip correctly receives WREN each time but rejects the second PP silently.
+
+**Test 7: SPI speed variation**
+Tried CH341A speed settings 0x60, 0x61, 0x62, 0x63 — all produce identical 2-byte limit.
+
+**Test 8: USB packet strategies**
+- Single A8 prefix (all data in one SPI packet): 2 bytes
+- Flashrom-style 31-byte A8 chunks: 2 bytes
+- Separate USB writes for UIO and SPI: 2 bytes
+- Multiple A8 commands with CS# held low: 2 bytes
+
+**Test 9: GPIO bit-bang attempt**
+Attempted to bypass the SPI engine entirely by bit-banging MOSI via UIO GPIO (D5).
+**Result:** Same 2-byte limit — D5 GPIO does NOT connect to the physical MOSI pin.
+The CH341A's SPI data pins are hardwired to the SPI engine, not accessible via UIO GPIO.
+
+#### Root Cause Conclusion
+
+**The CH341A's SPI stream engine (command 0xA8) has a hardware MOSI data buffer of approximately 6 bytes.** After the first 6 bytes of SPI data are clocked out correctly on MOSI, all subsequent bytes become 0xFF.
+
+This explains ALL prior observations:
+- **Erase works:** Sector Erase = 4 SPI bytes (0x20 + 3 addr) → within 6-byte buffer ✓
+- **WREN works:** 1 SPI byte (0x06) → within buffer ✓
+- **RDID works:** 1 SPI byte sent (0x9F), chip responds on MISO ✓
+- **Reads work:** 4 SPI bytes sent (0x03 + 3 addr), chip drives MISO → MOSI only needs 4 bytes ✓
+- **Page Program fails:** 260 SPI bytes needed (0x02 + 3 addr + 256 data) → only first 6 go through, data bytes 3-256 become 0xFF, which is a no-op on erased flash ✗
+- **Session 7 "voltage mismatch" was a misdiagnosis:** The 0.18%/pass success rate was actually from the 2 bytes per PP landing randomly across repeated hammer cycles, not from per-bit voltage errors
+
+The 6-byte MOSI limit is sufficient for all read/erase/status operations. It ONLY affects Page Program (writes), which is the only SPI command requiring more than ~4 bytes of meaningful MOSI data.
+
+**This is a hardware limitation of the CH341A IC itself. No software, driver, or firmware change can fix it. A different programmer is required.**
+
+### Chip State (End of Session 8)
+- Chip has been erased multiple times during testing
+- Some residual test data at address 0x100000 (test patterns from write experiments)
+- VBIOS data region (0x000000-0x0F41FF) is mostly erased from the full-chip write attempt
+- **The original corrupted VBIOS data is gone** — chip needs a complete re-flash
+
+### What Works
+- ✅ Chip detection (RDID EF 60 15)
+- ✅ Status register read/write
+- ✅ Sector erase (4KB)
+- ✅ Chip erase (except bad sector 0x111000)
+- ✅ Page Program for 2 data bytes per page
+- ✅ Read (2-byte noise floor — excellent)
+- ✅ No write protection issues
+
+### What Doesn't Work
+- ❌ Page Program with more than 2 data bytes (CH341A MOSI buffer limit)
+- ❌ Multiple Page Programs to same page per erase (chip rejects)
+- ❌ Bad sector at 0x111000 (physically damaged, can't erase)
+
+### Root Cause Revision: GPU SPI Bus Contention, NOT CH341A MOSI Buffer
+
+**CORRECTION:** The initial Session 8 diagnosis ("CH341A has a 6-byte MOSI buffer limit") was WRONG.
+
+The CH341A V1.7 (Amazon B0D9XQ4YBV, GODIYMODULES) has:
+- **Dedicated level conversion IC** on the PCB (not just an AMS1117 VCC regulator)
+- **Voltage switch** for 1.8V/3.3V/5V selection
+- Proven to work with 1.8V chips (W25Q64FW shown in manufacturer's AsProgrammer screenshot)
+- Product claims: "Integrated dedicated level conversion chip, directly read and write 5v, 3.3v, 2.5v, 1.8v chips"
+
+The manufacturer's troubleshooting guide explicitly describes our exact failure mode:
+- **"Communication line is occupied"** — the GPU's SPI controller pins (MOSI, CLK, CS, MISO) are connected to the same flash chip. Even with the laptop powered off, the GPU's I/O pads have protection diodes and ESD structures that load down the SPI bus.
+- Short SPI commands (erase: 4 bytes, RDID: 4 bytes) get through because they're brief and the bus loading doesn't corrupt them.
+- Page Program (260 bytes sustained MOSI) fails because the GPU's bus loading corrupts the MOSI data after the first few bytes.
+- **Manufacturer's stated solution: "remove the chip to read and write!"**
+- **"As long as you disconnect the chip's 8 wires and other circuits, the programmer in the board read and write 100% will not have a problem."**
+
+This was actually the Session 6 "SPI bus contention" hypothesis, which was CORRECT but was abandoned in Session 7 when the "voltage mismatch" theory took over.
+
+### Required Fix
+**Desolder the W25Q16JWNIQ from the Razer motherboard**, program it off-board using the SOP8-to-DIP8 adapter in the CH341A V1.7's ZIF socket, then solder it back.
+
+No programmer can "overpower" the GPU's bus loading at 1.8V — the voltage is dictated by the chip's rating (1.65-1.95V max), and driving harder at 1.8V doesn't change the physics. People who successfully flash GPU VBIOS externally desolder the chip first. There is no in-circuit workaround for GPU SPI bus contention.
+
+**Equipment on hand:** CH341A V1.7 kit (GODIYMODULES, Amazon B0D9XQ4YBV) includes SOP8-to-DIP8 adapter board for ZIF socket programming. No additional purchases needed.
+
+### Scripts Created/Updated This Session
+- `clear_wp.py` — Updated: now handles WPS/SR3, Global Block Unlock (0x98), JEDEC ID verification, individual block lock scanning
+- `probe_chip.py` — New: retry-loop chip probe with flashrom-compatible CH341A init
+- `chip_diag.py` — New: full chip diagnostic (SR1/SR2/SR3, block locks, write test)
+- `write_size_test.py` — New: Page Program size sweep (proved 2-byte limit)
+- `write_erase_test.py` — New: multi-write and per-page/per-sector limit testing
+- `debug_multi_write.py` — New: SR1 analysis between sequential Page Programs
+- `bitbang_flash.py` — New: GPIO bit-bang attempt (proved D5 GPIO ≠ MOSI pin)
+- `write_test.py` — New: flashrom-based write analysis
+- `write_fix_test.py` — New: USB packet strategy testing

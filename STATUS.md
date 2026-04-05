@@ -282,15 +282,15 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 - **Risk:** Low — worst case same EEPROM not found error
 - **See:** WINDOWS_NVFLASH_PROCEDURE.md for step-by-step
 
-### N15 — CH341A Hardware SPI Programmer ⬅ **IN PROGRESS (PARTIALLY WORKING)**
-- **Priority:** CRITICAL — this is the ONLY remaining viable method
-- **Status:** **Chip responds, reads/erases work, writes partially land (0.18%/pass).** Session 7 broke through the Session 5–6 detection failures. SPI bus contention hypothesis was WRONG — the real issue is data line voltage mismatch from the adapter. 45.5% of target bytes accumulated correctly via no-erase hammering.
-- **How:** CH341A programmer + **proper 1.8V level shifting** + SOP8 test clip → direct SPI flash of W25Q16JWN.
-- **Why it works:** Bypasses the GPU, falcons, and FWSEC entirely. Talks SPI directly to the flash chip. The approach is proven correct (bits land in the right direction, zero overcorrect bits).
-- **⚠️ CRITICAL:** Chip is 1.65V–1.95V only. CH341A native 3.3V **WILL DESTROY IT**. 1.8V adapter is **MANDATORY** but current adapter only drops VCC, not data lines.
-- **Blocker:** Data line voltage mismatch — need TXS0108E level shifter ($3) or CH347T programmer ($15) for proper 1.8V data line driving.
-- **⚠️ DO NOT ERASE THE CHIP** — 45.5% accumulated correct bits would be lost.
-- **See:** `scripts/ch341a_write_noerase.py`, `scripts/flash_vbios.py`, T31
+### N15 — CH341A Hardware SPI Programmer ⬅ **FIX IDENTIFIED: DESOLDER CHIP**
+- **Priority:** CRITICAL — this is the ONLY viable method
+- **Status:** **The CH341A V1.7 programmer works correctly.** It has a dedicated level conversion IC and voltage switch supporting 1.8V. The manufacturer confirms it programs 1.8V chips (W25Q64FW demonstrated in their AsProgrammer screenshot).
+- **The problem is GPU SPI bus contention during in-circuit programming.** The GPU's SPI controller pins load down MOSI/CLK even when the laptop is powered off. Short commands (erase, RDID, WREN: 1-4 bytes) get through; Page Program (260 bytes sustained MOSI) fails after ~6 bytes because bus loading corrupts the data.
+- **Session 7 "voltage mismatch" was wrong.** Session 8 "MOSI buffer limit" was also wrong. The **actual root cause is in-circuit bus contention** — the same hypothesis from Session 6 that was prematurely abandoned.
+- **Manufacturer's troubleshooting explicitly states:** "Communication line is occupied... the main control of the motherboard directly connected... The simplest solution: remove the chip to read and write! As long as you disconnect the chip's 8 wires and other circuits, the programmer in the board read and write 100% will not have a problem."
+- **Fix:** Desolder the W25Q16JWNIQ, program it off-board in the SOP8-to-DIP8 adapter on the ZIF socket, solder it back.
+- **Equipment:** CH341A V1.7 with 1.8V level conversion (Amazon B0D9XQ4YBV, GODIYMODULES), SOP8-to-DIP8 adapter (included in kit), AsProgrammer with W25Q16FW_1.8V chip selection
+- **See:** `TROUBLESHOOTING_LOG.md` Session 8
 
 ---
 
@@ -317,12 +317,20 @@ Chicken-and-egg: GPU falcon microcontroller is halted because its firmware (stor
 | GSP RM | Loads successfully (570.144) — but cannot proceed without FWSEC-verified VBIOS |
 | Falcon register write-lock | PMU/GSP/SEC2 IMEM/DMEM/CPUCTL all reject writes — FWSEC hardware gate |
 | SEC2 DMEMD marker | `0xDEAD5EC2` ("DEAD SEC2") — NVIDIA locked-state debug value |
-| CH341A chip detection | RDID 0xEF6015 = Winbond W25Q16JW (Session 7) |
-| CH341A read quality | Works but noisy — 133 bytes differ between consecutive reads |
+| CH341A chip detection | RDID 0xEF6015 = Winbond W25Q16JW (Sessions 7-8) |
+| CH341A read quality (V1.7) | 2 bytes differ between consecutive reads (Session 8) |
+| CH341A read quality (old) | 133 bytes differ between consecutive reads (Session 7) |
 | CH341A erase | Works perfectly — chip goes to all 0xFF reliably |
-| CH341A write success rate | 0.18% per-byte per pass (identical across flashrom, ch341prog, Python) |
+| CH341A MOSI buffer limit | **~6 bytes** — Page Program only delivers 2 data bytes (Session 8) |
+| CH341A 2-byte write reliability | **100%** — 8/8 tests passed (Session 8) |
+| CH341A per-page PP limit | ONE Page Program per 256-byte page per erase cycle |
 | CH341A overcorrect bits | 0 (zero) — every bit that lands is correct |
-| Chip state after 25 passes | 45.5% overall byte match, 3.8% actual data bytes correct |
-| backup_corrupted.bin | 99.8% match to target VBIOS — corruption is minimal |
+| Write protection (SR1/SR2/SR3) | SR1=0x00, SR2=0x02 (QE=1 only), SR3=0x00 (WPS=0) — NO protection |
+| Block locks | All 32 blocks unlocked (Session 8) |
+| Chip state (end Session 8) | Mostly erased from testing — needs full re-flash |
+| backup_corrupted.bin | 99.8% match to target VBIOS — corruption was minimal |
 | 1.8V adapter | AMS1117: drops VCC only, data lines pass through at 3.3–5V |
-| Total methods tried | 31 (T01–T31 across 7 sessions) + 11 researched/ruled out (N03–N23) |
+| CH341A V1.7 "1.8V Level Conversion" | Improved reads (133→2 bytes noise), writes still limited by MOSI buffer |
+| Bad sector | 0x111000 — physically damaged, can't erase (present since Session 7) |
+| Total methods tried | 31 (T01–T31) + Session 8 testing + 11 researched/ruled out (N03–N23) |
+| Software tools tested (all same result) | flashrom, ch341prog, IMSProg, AsProgrammer, NeoProgrammer, custom Python |
